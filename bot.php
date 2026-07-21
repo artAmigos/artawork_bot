@@ -16,17 +16,28 @@ function processUpdate($update) {
         $user_id = registerUser($chat_id, $username);
         
         // Проверяем реферальную ссылку при старте
-        if (strpos($text, '/start') === 0) {
-            $parts = explode(' ', $text);
-            if (isset($parts[1]) && strpos($parts[1], 'ref_') === 0) {
-                $ref_id = (int)str_replace('ref_', '', $parts[1]);
-                if ($ref_id > 0 && $ref_id != $user_id) {
-                    $stmt = $pdo->prepare("UPDATE users SET ref_id = ? WHERE id = ?");
-                    $stmt->execute([$ref_id, $user_id]);
-                }
-            }
-        }
+
         
+// Проверяем реферальную ссылку при старте - ТОЛЬКО ДЛЯ НОВЫХ ПОЛЬЗОВАТЕЛЕЙ!
+if (strpos($text, '/start') === 0) {
+    $parts = explode(' ', $text);
+    if (isset($parts[1]) && strpos($parts[1], 'ref_') === 0) {
+        $ref_id = (int)str_replace('ref_', '', $parts[1]);
+        
+        // Проверяем, есть ли у пользователя уже реферал
+        $stmt = $pdo->prepare("SELECT ref_id FROM users WHERE id = ?");
+        $stmt->execute([$user_id]);
+        $current_ref = $stmt->fetchColumn();
+        
+        // Сохраняем реферала ТОЛЬКО если у пользователя ещё нет реферала
+        // И реферал не равен самому себе
+        if ($current_ref == 0 && $ref_id > 0 && $ref_id != $user_id) {
+            $stmt = $pdo->prepare("UPDATE users SET ref_id = ? WHERE id = ?");
+            $stmt->execute([$ref_id, $user_id]);
+        }
+    }
+}
+
         // Обработка команд
         if ($text == '/start') {
             $welcome = "👋 Добро пожаловать в ArtaWork!\n\n";

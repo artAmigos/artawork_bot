@@ -153,6 +153,7 @@ function getUserRank($user_id) {
 }
 
 // Функция для регистрации пользователя
+// Функция для регистрации пользователя
 function registerUser($telegram_id, $username) {
     global $pdo;
     
@@ -161,8 +162,19 @@ function registerUser($telegram_id, $username) {
     $user = $stmt->fetch();
     
     if (!$user) {
+        // Проверяем реферальную ссылку из GET параметра
         $ref_id = isset($_GET['ref']) ? (int)$_GET['ref'] : 0;
         
+        // Также проверяем в тексте сообщения (для ссылок из бота)
+        // Этот параметр передаётся через start
+        if ($ref_id == 0 && isset($_GET['start'])) {
+            $start = $_GET['start'];
+            if (strpos($start, 'ref_') === 0) {
+                $ref_id = (int)str_replace('ref_', '', $start);
+            }
+        }
+        
+        // Создаём пользователя
         $stmt = $pdo->prepare("INSERT INTO users (telegram_id, username, ref_id, created_at) VALUES (?, ?, ?, NOW())");
         $stmt->execute([$telegram_id, $username, $ref_id]);
         $user_id = $pdo->lastInsertId();
