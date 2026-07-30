@@ -36,7 +36,7 @@ define('DUEL_DURATION', 24); // часов
 define('DUEL_WIN_POINTS', 50);
 define('DUEL_LOSS_POINTS', -50);
 
-// Настройки переводов (P2P)
+// Настройки переводов (P2P) - УПРОЩАЕМ!
 define('TRANSFER_MIN_AMOUNT', 10);
 define('TRANSFER_MAX_AMOUNT', 5000);
 define('TRANSFER_DAILY_LIMIT', 10);
@@ -44,7 +44,7 @@ define('TRANSFER_DAILY_SUM_LIMIT', 10000);
 define('TRANSFER_CONFIRM_TIME', 5); // минут
 define('TRANSFER_COOLDOWN', 3600); // 1 час в секундах
 
-// Настройки invite transfer (Переслать деньги)
+// Настройки invite transfer (Переслать деньги) - ОСНОВНОЙ СПОСОБ!
 define('INVITE_TRANSFER_DAILY_LIMIT', 5);
 define('INVITE_TRANSFER_EXPIRE', 24); // часов
 define('INVITE_TRANSFER_FEE', 0.02); // 2% комиссия

@@ -30,7 +30,7 @@ function processUpdate($update) {
                         $stmt->execute([$ref_id, $user_id]);
                     }
                 }
-                // Проверяем Invite Transfer (переслать деньги)
+                // Проверяем Invite Transfer (переслать деньги) - ОСНОВНОЙ СПОСОБ!
                 if (strpos($parts[1], 'invite_') === 0) {
                     $code = str_replace('invite_', '', $parts[1]);
                     processInviteTransfer($chat_id, $user_id, $code);
@@ -102,7 +102,7 @@ function processUpdate($update) {
             checkAndCompleteQuest($user_id, 'ask_help');
             showHelp($chat_id);
         }
-        // Обработка текста для вывода и переводов
+        // Обработка текста для вывода
         else {
             // Проверка на ввод реквизитов для вывода
             $stmt = $pdo->prepare("SELECT withdraw_waiting_text FROM users WHERE telegram_id = ?");
@@ -110,15 +110,6 @@ function processUpdate($update) {
             $waiting = $stmt->fetchColumn();
             if ($waiting == 'yes') {
                 handleWithdrawText($chat_id, $text);
-                return;
-            }
-            
-            // Проверка на ввод для P2P перевода
-            $stmt = $pdo->prepare("SELECT transfer_waiting_username FROM users WHERE telegram_id = ?");
-            $stmt->execute([$chat_id]);
-            $transfer_username = $stmt->fetchColumn();
-            if ($transfer_username) {
-                handleTransferText($chat_id, $user_id, $transfer_username, $text);
                 return;
             }
         }
@@ -192,14 +183,13 @@ function processUpdate($update) {
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
         }
         
-        // === ОБРАБОТКА CALLBACK ДЛЯ ПЕРЕВОДОВ (P2P) ===
-        if (strpos($data, 'transfer_accept_') === 0) {
-            $transfer_id = (int)str_replace('transfer_accept_', '', $data);
-            acceptTransfer($chat_id, $user_id, $transfer_id, $callback['id']);
+        // === ОБРАБОТКА CALLBACK ДЛЯ ОТПУСКА ===
+        if ($data == 'vacation_confirm') {
+            confirmVacation($chat_id, $user_id, $callback['id']);
         }
-        if (strpos($data, 'transfer_reject_') === 0) {
-            $transfer_id = (int)str_replace('transfer_reject_', '', $data);
-            rejectTransfer($chat_id, $user_id, $transfer_id, $callback['id']);
+        if ($data == 'vacation_cancel') {
+            sendMessage($chat_id, "❌ Отпуск отменён.", mainKeyboard());
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
         }
         
         // === ОБРАБОТКА CALLBACK ДЛЯ INVITE TRANSFER ===
@@ -214,7 +204,7 @@ function processUpdate($update) {
 }
 
 // ============================================
-// 1. 🏖️ ОТПУСК
+// 1. 🏖️ ОТПУСК (С ПОДТВЕРЖДЕНИЕМ)
 // ============================================
 function handleVacation($chat_id, $user_id) {
     global $pdo;
@@ -232,19 +222,48 @@ function handleVacation($chat_id, $user_id) {
         return;
     }
     
-    // Проверяем, что отпуск берётся на завтра
-    $tomorrow = date('Y-m-d', strtotime('+1 day'));
+    $tomorrow = date('d.m.Y', strtotime('+1 day'));
+    
+    $text = "🏖️ <b>Подтверждение отпуска</b>\n\n";
+    $text .= "Ты собираешься взять отпуск на <b>$tomorrow</b>.\n";
+    $text .= "Этот день не будет считаться пропущенным для стрика.\n\n";
+    $text .= "❓ <b>Подтверждаешь?</b>";
+    
+    $inlineKeyboard = [
+        'inline_keyboard' => [
+            [['text' => '✅ Да, подтверждаю', 'callback_data' => 'vacation_confirm']],
+            [['text' => '❌ Нет, отмена', 'callback_data' => 'vacation_cancel']]
+        ]
+    ];
+    
+    sendMessage($chat_id, $text, $inlineKeyboard);
+}
+
+function confirmVacation($chat_id, $user_id, $callback_id) {
+    global $pdo;
+    
+    // Проверяем ещё раз
+    $stmt = $pdo->prepare("SELECT vacation_used_at FROM users WHERE id = ?");
+    $stmt->execute([$user_id]);
+    $last_vacation = $stmt->fetchColumn();
+    
+    if ($last_vacation && strtotime($last_vacation) > strtotime('-14 days')) {
+        sendMessage($chat_id, "❌ Отпуск уже был использован недавно!", mainKeyboard());
+        botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
+        return;
+    }
     
     // Сохраняем отпуск
     $stmt = $pdo->prepare("UPDATE users SET vacation_used_at = ? WHERE id = ?");
     $stmt->execute([date('Y-m-d'), $user_id]);
     
     // Записываем в транзакции для истории
-    $desc = 'Отпуск на ' . $tomorrow;
+    $desc = 'Отпуск на ' . date('Y-m-d', strtotime('+1 day'));
     $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, 0, 'vacation', ?, NOW())");
     $stmt->execute([$user_id, $desc]);
     
     sendMessage($chat_id, "🏖️ <b>Отпуск оформлен!</b>\n\nТы взял отпуск на <b>" . date('d.m.Y', strtotime('+1 day')) . "</b>\n\n✅ Завтрашний день не будет считаться пропущенным!", mainKeyboard());
+    botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
 }
 
 // ============================================
@@ -288,21 +307,39 @@ function handleDailyBonus($chat_id, $user_id) {
 }
 
 // ============================================
-// 3. 📨 ПЕРЕСЛАТЬ ДЕНЬГИ (INVITE TRANSFER)
+// 3. 📨 ПЕРЕСЛАТЬ ДЕНЬГИ (INVITE TRANSFER) - ОСНОВНОЙ СПОСОБ!
 // ============================================
-function createInviteTransfer($chat_id, $user_id, $callback_id) {
+function handleTransfer($chat_id, $user_id) {
     global $pdo;
     
-    // Проверяем лимит на сегодня
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM invite_transfers WHERE sender_id = ? AND DATE(created_at) = CURDATE()");
-    $stmt->execute([$user_id]);
-    $today_count = $stmt->fetchColumn();
+    checkAndCompleteQuest($user_id, 'check_transfer');
     
-    if ($today_count >= INVITE_TRANSFER_DAILY_LIMIT) {
-        sendMessage($chat_id, "❌ Ты исчерпал лимит пригласительных переводов на сегодня (макс. " . INVITE_TRANSFER_DAILY_LIMIT . ")", mainKeyboard());
-        botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
-        return;
-    }
+    $text = "💸 <b>Перевод средств через пересылку</b>\n\n";
+    $text .= "💰 Твой баланс: " . formatRub(getUserBalance($user_id)) . "\n";
+    $text .= "📊 Лимиты:\n";
+    $text .= "• Переводов в день: " . INVITE_TRANSFER_DAILY_LIMIT . "\n";
+    $text .= "• Комиссия: 2%\n";
+    $text .= "• Срок действия: " . INVITE_TRANSFER_EXPIRE . " часов\n\n";
+    $text .= "📨 Ты создаёшь ссылку-приглашение с суммой.\n";
+    $text .= "Перешли её любому пользователю Telegram.\n";
+    $text .= "Он получит деньги после регистрации в боте!\n\n";
+    $text .= "💰 Выбери сумму:";
+    
+    $inlineKeyboard = [
+        'inline_keyboard' => [
+            [['text' => '100 ₽', 'callback_data' => 'invite_amount_100']],
+            [['text' => '200 ₽', 'callback_data' => 'invite_amount_200']],
+            [['text' => '500 ₽', 'callback_data' => 'invite_amount_500']],
+            [['text' => '1000 ₽', 'callback_data' => 'invite_amount_1000']],
+            [['text' => '❌ Отмена', 'callback_data' => 'withdraw_cancel']]
+        ]
+    ];
+    
+    sendMessage($chat_id, $text, $inlineKeyboard);
+}
+
+function createInviteTransfer($chat_id, $user_id, $callback_id) {
+    global $pdo;
     
     // Показываем выбор суммы
     $text = "📨 <b>Переслать деньги</b>\n\n";
@@ -327,24 +364,24 @@ function createInviteTransfer($chat_id, $user_id, $callback_id) {
 function createInviteTransferWithAmount($chat_id, $user_id, $amount, $callback_id) {
     global $pdo;
     
-    // Проверяем баланс
-    $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
-    $stmt->execute([$user_id]);
-    $balance = $stmt->fetchColumn();
-    
-    if ($balance < $amount) {
-        sendMessage($chat_id, "❌ Недостаточно средств! Твой баланс: " . formatRub($balance), mainKeyboard());
-        botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
-        return;
-    }
-    
     // Проверяем лимит на сегодня
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM invite_transfers WHERE sender_id = ? AND DATE(created_at) = CURDATE()");
     $stmt->execute([$user_id]);
     $today_count = $stmt->fetchColumn();
     
     if ($today_count >= INVITE_TRANSFER_DAILY_LIMIT) {
-        sendMessage($chat_id, "❌ Лимит исчерпан", mainKeyboard());
+        sendMessage($chat_id, "❌ Ты исчерпал лимит пригласительных переводов на сегодня (макс. " . INVITE_TRANSFER_DAILY_LIMIT . ")", mainKeyboard());
+        botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
+        return;
+    }
+    
+    // Проверяем баланс
+    $balance = getUserBalance($user_id);
+    $fee = $amount * INVITE_TRANSFER_FEE;
+    $total_with_fee = $amount + $fee;
+    
+    if ($balance < $total_with_fee) {
+        sendMessage($chat_id, "❌ Недостаточно средств!\n\n💰 Твой баланс: " . formatRub($balance) . "\n📊 Нужно: " . formatRub($total_with_fee) . " (включая комиссию)", mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
@@ -360,14 +397,13 @@ function createInviteTransferWithAmount($chat_id, $user_id, $amount, $callback_i
     // Создаём запись
     $stmt = $pdo->prepare("INSERT INTO invite_transfers (sender_id, amount, code, status, created_at, expires_at) VALUES (?, ?, ?, 'pending', NOW(), DATE_ADD(NOW(), INTERVAL ? HOUR))");
     $stmt->execute([$user_id, $amount, $code, INVITE_TRANSFER_EXPIRE]);
+    $transfer_id = $pdo->lastInsertId();
     
     // Списываем сумму (с комиссией)
-    $fee = $amount * INVITE_TRANSFER_FEE;
-    $total_with_fee = $amount + $fee;
     $stmt = $pdo->prepare("UPDATE users SET balance = balance - ? WHERE id = ?");
     $stmt->execute([$total_with_fee, $user_id]);
     
-    $desc = 'Invite Transfer (комиссия ' . ($fee) . ' ₽)';
+    $desc = 'Invite Transfer (комиссия ' . formatRub($fee) . ')';
     $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'invite_transfer', ?, NOW())");
     $stmt->execute([$user_id, -$total_with_fee, $desc]);
     
@@ -412,287 +448,21 @@ function processInviteTransfer($chat_id, $user_id, $code) {
     $stmt->execute([$transfer['id']]);
     
     // Транзакция получателю
-    $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'invite_transfer_receive', 'Получен Invite Transfer', NOW())");
-    $stmt->execute([$user_id, $transfer['amount']]);
+    $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'invite_transfer_receive', 'Получен Invite Transfer от #' . ?, NOW())");
+    $stmt->execute([$user_id, $transfer['amount'], $transfer['sender_id']]);
     
     // Уведомление отправителю
     $stmt = $pdo->prepare("SELECT username FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
-    $receiver = $stmt->fetchColumn();
+    $receiver_username = $stmt->fetchColumn();
     
-    sendMessage($transfer['sender_id'], "✅ Пользователь @" . $receiver . " получил твой перевод в размере " . formatRub($transfer['amount']) . "!", mainKeyboard());
+    sendMessage($transfer['sender_id'], "✅ Пользователь @" . $receiver_username . " получил твой перевод в размере " . formatRub($transfer['amount']) . "!", mainKeyboard());
     
-    sendMessage($chat_id, "✅ <b>Перевод получен!</b>\n\n💰 Начислено: <b>" . formatRub($transfer['amount']) . "</b>\n📨 Отправитель: @" . $receiver, mainKeyboard());
+    sendMessage($chat_id, "✅ <b>Перевод получен!</b>\n\n💰 Начислено: <b>" . formatRub($transfer['amount']) . "</b>\n📨 Отправитель: #" . $transfer['sender_id'], mainKeyboard());
 }
 
 // ============================================
-// 4. 💸 ВНУТРЕННИЕ ПЕРЕВОДЫ (P2P)
-// ============================================
-function handleTransfer($chat_id, $user_id) {
-    global $pdo;
-    
-    // Проверяем активные входящие переводы
-    $stmt = $pdo->prepare("SELECT t.*, u.username as sender_name FROM transfers t 
-                           JOIN users u ON t.sender_id = u.id 
-                           WHERE t.receiver_id = ? AND t.status = 'pending' AND t.expires_at > NOW()");
-    $stmt->execute([$user_id]);
-    $pending_transfers = $stmt->fetchAll();
-    
-    if (count($pending_transfers) > 0) {
-        $text = "📨 <b>Входящие переводы:</b>\n\n";
-        foreach ($pending_transfers as $t) {
-            $text .= "• @" . $t['sender_name'] . " → " . formatRub($t['amount']) . "\n";
-            $text .= "  ⏳ Осталось: " . round((strtotime($t['expires_at']) - time()) / 60) . " мин.\n";
-        }
-        $text .= "\nНажми на кнопку, чтобы принять:";
-        
-        $inlineKeyboard = ['inline_keyboard' => []];
-        foreach ($pending_transfers as $t) {
-            $inlineKeyboard['inline_keyboard'][] = [
-                ['text' => "✅ Принять от @" . $t['sender_name'] . " (" . formatRub($t['amount']) . ")", 'callback_data' => 'transfer_accept_' . $t['id']],
-                ['text' => "❌ Отклонить", 'callback_data' => 'transfer_reject_' . $t['id']]
-            ];
-        }
-        sendMessage($chat_id, $text, $inlineKeyboard);
-        return;
-    }
-    
-    // Показываем меню отправки перевода
-    $text = "💸 <b>Внутренний перевод</b>\n\n";
-    $text .= "💰 Твой баланс: " . formatRub(getUserBalance($user_id)) . "\n";
-    $text .= "📊 Лимиты:\n";
-    $text .= "• Мин. сумма: " . formatRub(TRANSFER_MIN_AMOUNT) . "\n";
-    $text .= "• Макс. сумма: " . formatRub(TRANSFER_MAX_AMOUNT) . "\n";
-    $text .= "• Переводов в день: " . TRANSFER_DAILY_LIMIT . "\n";
-    $text .= "• Сумма в день: " . formatRub(TRANSFER_DAILY_SUM_LIMIT) . "\n\n";
-    $text .= "✏️ <b>Напиши @username получателя</b>";
-    
-    // Устанавливаем флаг ожидания ввода username
-    $stmt = $pdo->prepare("UPDATE users SET transfer_waiting_username = 'waiting' WHERE id = ?");
-    $stmt->execute([$user_id]);
-    
-    sendMessage($chat_id, $text, mainKeyboard());
-}
-
-function handleTransferText($chat_id, $user_id, $transfer_username, $text) {
-    global $pdo;
-    
-    // Сброс флага
-    $stmt = $pdo->prepare("UPDATE users SET transfer_waiting_username = NULL WHERE id = ?");
-    $stmt->execute([$user_id]);
-    
-    // Парсим username
-    $username = trim($text);
-    if (strpos($username, '@') === 0) {
-        $username = substr($username, 1);
-    }
-    
-    if (empty($username)) {
-        sendMessage($chat_id, "❌ Введи корректный @username", mainKeyboard());
-        return;
-    }
-    
-    // Находим получателя
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE username = ?");
-    $stmt->execute([$username]);
-    $receiver_id = $stmt->fetchColumn();
-    
-    if (!$receiver_id) {
-        sendMessage($chat_id, "❌ Пользователь @" . $username . " не найден в системе!", mainKeyboard());
-        return;
-    }
-    
-    if ($receiver_id == $user_id) {
-        sendMessage($chat_id, "❌ Нельзя переводить самому себе!", mainKeyboard());
-        return;
-    }
-    
-    // Проверяем лимиты
-    if (!checkTransferLimits($user_id)) {
-        sendMessage($chat_id, "❌ Ты исчерпал лимит переводов на сегодня!", mainKeyboard());
-        return;
-    }
-    
-    // Сохраняем получателя в сессии и запрашиваем сумму
-    $stmt = $pdo->prepare("UPDATE users SET transfer_temp_receiver = ? WHERE id = ?");
-    $stmt->execute([$receiver_id, $user_id]);
-    
-    $text = "💸 <b>Введите сумму перевода</b>\n\n";
-    $text .= "👤 Получатель: @" . $username . "\n";
-    $text .= "📊 Мин. сумма: " . formatRub(TRANSFER_MIN_AMOUNT) . "\n";
-    $text .= "📊 Макс. сумма: " . formatRub(TRANSFER_MAX_AMOUNT) . "\n\n";
-    $text .= "✏️ Напиши сумму цифрами";
-    
-    sendMessage($chat_id, $text, mainKeyboard());
-    
-    // Устанавливаем флаг ожидания суммы
-    $stmt = $pdo->prepare("UPDATE users SET transfer_waiting_amount = 'waiting' WHERE id = ?");
-    $stmt->execute([$user_id]);
-}
-
-function createTransfer($chat_id, $user_id, $receiver_id, $amount) {
-    global $pdo;
-    
-    // Проверяем баланс
-    $balance = getUserBalance($user_id);
-    if ($balance < $amount) {
-        sendMessage($chat_id, "❌ Недостаточно средств! Твой баланс: " . formatRub($balance), mainKeyboard());
-        return;
-    }
-    
-    // Проверяем лимиты
-    if (!checkTransferLimits($user_id)) {
-        sendMessage($chat_id, "❌ Ты исчерпал лимит переводов на сегодня!", mainKeyboard());
-        return;
-    }
-    
-    // Проверяем анти-спам (1 час между переводами одному пользователю)
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM transfers WHERE sender_id = ? AND receiver_id = ? AND created_at > DATE_SUB(NOW(), INTERVAL ? SECOND)");
-    $stmt->execute([$user_id, $receiver_id, TRANSFER_COOLDOWN]);
-    if ($stmt->fetchColumn() > 0) {
-        sendMessage($chat_id, "❌ Подожди 1 час перед повторным переводом этому пользователю!", mainKeyboard());
-        return;
-    }
-    
-    // Создаём перевод
-    $stmt = $pdo->prepare("INSERT INTO transfers (sender_id, receiver_id, amount, status, created_at, expires_at) VALUES (?, ?, ?, 'pending', NOW(), DATE_ADD(NOW(), INTERVAL ? MINUTE))");
-    $stmt->execute([$user_id, $receiver_id, $amount, TRANSFER_CONFIRM_TIME]);
-    $transfer_id = $pdo->lastInsertId();
-    
-    // Списываем сумму
-    $stmt = $pdo->prepare("UPDATE users SET balance = balance - ? WHERE id = ?");
-    $stmt->execute([$amount, $user_id]);
-    
-    $desc = 'Перевод пользователю #' . $receiver_id;
-    $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'transfer_out', ?, NOW())");
-    $stmt->execute([$user_id, -$amount, $desc]);
-    
-    // Уведомляем получателя
-    $stmt = $pdo->prepare("SELECT username FROM users WHERE id = ?");
-    $stmt->execute([$user_id]);
-    $sender_name = $stmt->fetchColumn();
-    
-    $stmt = $pdo->prepare("SELECT username FROM users WHERE id = ?");
-    $stmt->execute([$receiver_id]);
-    $receiver_name = $stmt->fetchColumn();
-    
-    $text = "📨 <b>Входящий перевод!</b>\n\n";
-    $text .= "👤 От: @" . $sender_name . "\n";
-    $text .= "💰 Сумма: <b>" . formatRub($amount) . "</b>\n";
-    $text .= "⏳ Подтверди перевод в течение " . TRANSFER_CONFIRM_TIME . " минут\n\n";
-    $text .= "Нажми на кнопку, чтобы принять или отклонить перевод:";
-    
-    $inlineKeyboard = [
-        'inline_keyboard' => [
-            [['text' => '✅ Принять', 'callback_data' => 'transfer_accept_' . $transfer_id]],
-            [['text' => '❌ Отклонить', 'callback_data' => 'transfer_reject_' . $transfer_id]]
-        ]
-    ];
-    
-    sendMessage($receiver_id, $text, $inlineKeyboard);
-    
-    sendMessage($chat_id, "✅ Перевод отправлен пользователю @" . $receiver_name . "!\n\n💰 Сумма: <b>" . formatRub($amount) . "</b>\n⏳ Ожидай подтверждения.", mainKeyboard());
-}
-
-function acceptTransfer($chat_id, $user_id, $transfer_id, $callback_id) {
-    global $pdo;
-    
-    $stmt = $pdo->prepare("SELECT * FROM transfers WHERE id = ? AND receiver_id = ? AND status = 'pending' AND expires_at > NOW()");
-    $stmt->execute([$transfer_id, $user_id]);
-    $transfer = $stmt->fetch();
-    
-    if (!$transfer) {
-        sendMessage($chat_id, "❌ Перевод не найден или истек срок!", mainKeyboard());
-        botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
-        return;
-    }
-    
-    // Начисляем получателю
-    $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
-    $stmt->execute([$transfer['amount'], $user_id]);
-    
-    $stmt = $pdo->prepare("UPDATE transfers SET status = 'completed' WHERE id = ?");
-    $stmt->execute([$transfer_id]);
-    
-    $desc = 'Получен перевод #' . $transfer_id;
-    $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'transfer_in', ?, NOW())");
-    $stmt->execute([$user_id, $transfer['amount'], $desc]);
-    
-    // Уведомляем отправителя
-    $stmt = $pdo->prepare("SELECT username FROM users WHERE id = ?");
-    $stmt->execute([$user_id]);
-    $receiver_name = $stmt->fetchColumn();
-    
-    sendMessage($transfer['sender_id'], "✅ Пользователь @" . $receiver_name . " принял перевод!\n💰 Сумма: <b>" . formatRub($transfer['amount']) . "</b>");
-    
-    sendMessage($chat_id, "✅ Перевод принят!\n💰 Начислено: <b>" . formatRub($transfer['amount']) . "</b>", mainKeyboard());
-    botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
-}
-
-function rejectTransfer($chat_id, $user_id, $transfer_id, $callback_id) {
-    global $pdo;
-    
-    $stmt = $pdo->prepare("SELECT * FROM transfers WHERE id = ? AND receiver_id = ? AND status = 'pending'");
-    $stmt->execute([$transfer_id, $user_id]);
-    $transfer = $stmt->fetch();
-    
-    if (!$transfer) {
-        sendMessage($chat_id, "❌ Перевод не найден!", mainKeyboard());
-        botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
-        return;
-    }
-    
-    // Возвращаем деньги отправителю
-    $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
-    $stmt->execute([$transfer['amount'], $transfer['sender_id']]);
-    
-    $stmt = $pdo->prepare("UPDATE transfers SET status = 'expired' WHERE id = ?");
-    $stmt->execute([$transfer_id]);
-    
-    $desc = 'Возврат перевода #' . $transfer_id . ' (отклонен)';
-    $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'transfer_refund', ?, NOW())");
-    $stmt->execute([$transfer['sender_id'], $transfer['amount'], $desc]);
-    
-    // Уведомляем отправителя
-    $stmt = $pdo->prepare("SELECT username FROM users WHERE id = ?");
-    $stmt->execute([$user_id]);
-    $receiver_name = $stmt->fetchColumn();
-    
-    sendMessage($transfer['sender_id'], "❌ Пользователь @" . $receiver_name . " отклонил перевод!\n💰 Сумма возвращена на баланс.");
-    
-    sendMessage($chat_id, "❌ Перевод отклонен!", mainKeyboard());
-    botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
-}
-
-function checkTransferLimits($user_id) {
-    global $pdo;
-    
-    // Количество переводов за день
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM transfers WHERE sender_id = ? AND DATE(created_at) = CURDATE()");
-    $stmt->execute([$user_id]);
-    $count = $stmt->fetchColumn();
-    
-    if ($count >= TRANSFER_DAILY_LIMIT) return false;
-    
-    // Сумма переводов за день
-    $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM transfers WHERE sender_id = ? AND DATE(created_at) = CURDATE()");
-    $stmt->execute([$user_id]);
-    $sum = $stmt->fetchColumn();
-    
-    if ($sum >= TRANSFER_DAILY_SUM_LIMIT) return false;
-    
-    return true;
-}
-
-function getUserBalance($user_id) {
-    global $pdo;
-    $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
-    $stmt->execute([$user_id]);
-    return $stmt->fetchColumn() ?: 0;
-}
-
-// ============================================
-// 5. 🥊 ДУЭЛИ
+// 4. 🥊 ДУЭЛИ
 // ============================================
 function handleDuels($chat_id, $user_id) {
     global $pdo;
@@ -946,7 +716,7 @@ function joinDuel($chat_id, $user_id, $duel_id, $callback_id) {
 }
 
 // ============================================
-// 6. 👥 РЕФЕРАЛЫ 2.0 (обновлено)
+// 5. 👥 РЕФЕРАЛЫ 2.0
 // ============================================
 function showReferrals($chat_id, $user_id) {
     global $pdo;
@@ -994,7 +764,7 @@ function showReferrals($chat_id, $user_id) {
 }
 
 // ============================================
-// 7. 🔥 СТРИК
+// 6. 🔥 СТРИК
 // ============================================
 function handleStreak($chat_id, $user_id) {
     global $pdo;
@@ -1022,20 +792,33 @@ function handleStreak($chat_id, $user_id) {
 function updateStreak($chat_id, $user_id) {
     global $pdo;
     
-    $stmt = $pdo->prepare("SELECT daily_streak, last_streak_date FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT daily_streak, last_streak_date, vacation_used_at FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $user = $stmt->fetch();
     
     $today = date('Y-m-d');
     $last_date = $user['last_streak_date'];
     $streak = $user['daily_streak'] ?: 0;
+    $vacation_date = $user['vacation_used_at'] ?? null;
+    
+    // Проверяем, был ли отпуск вчера
+    $yesterday = date('Y-m-d', strtotime('-1 day'));
+    $is_vacation_today = ($vacation_date && $vacation_date == $today);
+    $is_vacation_yesterday = ($vacation_date && $vacation_date == $yesterday);
     
     if (!$last_date || $last_date == $today) {
         // Первый раз или уже сегодня обновляли
         return;
     }
     
-    $yesterday = date('Y-m-d', strtotime('-1 day'));
+    if ($is_vacation_yesterday) {
+        // Был отпуск вчера — стрик не сбрасывается, но и не увеличивается
+        // Обновляем дату, чтобы не сбросился
+        $stmt = $pdo->prepare("UPDATE users SET last_streak_date = ? WHERE id = ?");
+        $stmt->execute([$today, $user_id]);
+        return;
+    }
+    
     if ($last_date == $yesterday) {
         // Продолжаем стрик
         $streak++;
@@ -1069,7 +852,7 @@ function updateStreak($chat_id, $user_id) {
 }
 
 // ============================================
-// 8. 🎯 КВЕСТЫ
+// 7. 🎯 КВЕСТЫ
 // ============================================
 function handleQuests($chat_id, $user_id) {
     global $pdo;
@@ -1121,7 +904,7 @@ function handleQuests($chat_id, $user_id) {
 }
 
 // ============================================
-// 9. 🏆 ТОП-ЛИДЕРЫ
+// 8. 🏆 ТОП-ЛИДЕРЫ
 // ============================================
 function handleTop($chat_id, $user_id) {
     global $pdo;
@@ -1185,7 +968,7 @@ function handleTop($chat_id, $user_id) {
 }
 
 // ============================================
-// 10. 🎲 КЕЙСЫ / БОКСЫ
+// 9. 🎲 КЕЙСЫ / БОКСЫ
 // ============================================
 function handleCases($chat_id, $user_id) {
     global $pdo;
@@ -1271,8 +1054,6 @@ function openCase($chat_id, $user_id, $case_id, $callback_id) {
     
     // Генерируем награду
     $reward = mt_rand($case['min_reward'], $case['max_reward']);
-    
-    // Округляем до целого
     $reward = floor($reward);
     
     // Начисляем награду
@@ -1303,7 +1084,7 @@ function openCase($chat_id, $user_id, $case_id, $callback_id) {
 }
 
 // ============================================
-// СТАРЫЕ ФУНКЦИИ (обновлены)
+// СТАРЫЕ ФУНКЦИИ (без изменений)
 // ============================================
 
 function showTasks($chat_id, $user_id) {
@@ -1421,7 +1202,6 @@ function showTaskDetail($chat_id, $user_id, $task_id, $message_id, $callback_id)
     $text .= "⚠️ <b>Внимание!</b>\n";
     $text .= "Пользователи должны быть в подписанных сообществах минимум 3 дня.\n";
     $text .= "Иначе может привести к списанию средств с баланса.\n\n";
-    
     $text .= "✅ После выполнения нажми кнопку ниже:";
     
     $inlineKeyboard = [
@@ -1909,9 +1689,18 @@ function showHelp($chat_id) {
     $text .= "Соревнуйся с другими пользователями и выигрывай!\n\n";
     $text .= "🎲 <b>Кейсы:</b>\n";
     $text .= "За задания получай ключи и открывай кейсы с наградами!\n\n";
+    $text .= "📨 <b>Переводы:</b>\n";
+    $text .= "Создай пригласительный перевод и перешли его другу!\n\n";
     $text .= "📧 По всем вопросам: @artawork_support";
     
     sendMessage($chat_id, $text, mainKeyboard());
+}
+
+function getUserBalance($user_id) {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
+    $stmt->execute([$user_id]);
+    return $stmt->fetchColumn() ?: 0;
 }
 
 // ============================================
@@ -1948,6 +1737,6 @@ while (true) {
         sleep(3);
     }
     
-    usleep(500000); // 0.5 секунды
+    usleep(500000);
 }
 ?>
