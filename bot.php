@@ -30,7 +30,7 @@ function processUpdate($update) {
                         $stmt->execute([$ref_id, $user_id]);
                     }
                 }
-                // Проверяем Invite Transfer (переслать деньги) - ОСНОВНОЙ СПОСОБ!
+                // Проверяем Invite Transfer (переслать деньги)
                 if (strpos($parts[1], 'invite_') === 0) {
                     $code = str_replace('invite_', '', $parts[1]);
                     processInviteTransfer($chat_id, $user_id, $code);
@@ -211,7 +211,6 @@ function handleVacation($chat_id, $user_id) {
     
     checkAndCompleteQuest($user_id, 'check_vacation');
     
-    // Проверяем, можно ли взять отпуск (раз в 14 дней)
     $stmt = $pdo->prepare("SELECT vacation_used_at FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $last_vacation = $stmt->fetchColumn();
@@ -242,7 +241,6 @@ function handleVacation($chat_id, $user_id) {
 function confirmVacation($chat_id, $user_id, $callback_id) {
     global $pdo;
     
-    // Проверяем ещё раз
     $stmt = $pdo->prepare("SELECT vacation_used_at FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $last_vacation = $stmt->fetchColumn();
@@ -253,11 +251,9 @@ function confirmVacation($chat_id, $user_id, $callback_id) {
         return;
     }
     
-    // Сохраняем отпуск
     $stmt = $pdo->prepare("UPDATE users SET vacation_used_at = ? WHERE id = ?");
     $stmt->execute([date('Y-m-d'), $user_id]);
     
-    // Записываем в транзакции для истории
     $desc = 'Отпуск на ' . date('Y-m-d', strtotime('+1 day'));
     $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, 0, 'vacation', ?, NOW())");
     $stmt->execute([$user_id, $desc]);
@@ -272,7 +268,6 @@ function confirmVacation($chat_id, $user_id, $callback_id) {
 function handleDailyBonus($chat_id, $user_id) {
     global $pdo;
     
-    // Проверяем, получал ли уже бонус сегодня
     $stmt = $pdo->prepare("SELECT * FROM daily_bonuses WHERE user_id = ? AND bonus_date = CURDATE()");
     $stmt->execute([$user_id]);
     $bonus_today = $stmt->fetch();
@@ -282,7 +277,6 @@ function handleDailyBonus($chat_id, $user_id) {
         return;
     }
     
-    // Проверяем, был ли новый реферал за последние 24 часа
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE ref_id = ? AND created_at > DATE_SUB(NOW(), INTERVAL 1 DAY)");
     $stmt->execute([$user_id]);
     $new_refs = $stmt->fetchColumn();
@@ -292,7 +286,6 @@ function handleDailyBonus($chat_id, $user_id) {
         return;
     }
     
-    // Начисляем бонус
     $bonus = 50;
     $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
     $stmt->execute([$bonus, $user_id]);
@@ -307,12 +300,10 @@ function handleDailyBonus($chat_id, $user_id) {
 }
 
 // ============================================
-// 3. 📨 ПЕРЕСЛАТЬ ДЕНЬГИ (INVITE TRANSFER) - ОСНОВНОЙ СПОСОБ!
+// 3. 📨 ПЕРЕСЛАТЬ ДЕНЬГИ (INVITE TRANSFER)
 // ============================================
 function handleTransfer($chat_id, $user_id) {
     global $pdo;
-    
-    checkAndCompleteQuest($user_id, 'check_transfer');
     
     $text = "💸 <b>Перевод средств через пересылку</b>\n\n";
     $text .= "💰 Твой баланс: " . formatRub(getUserBalance($user_id)) . "\n";
@@ -341,7 +332,6 @@ function handleTransfer($chat_id, $user_id) {
 function createInviteTransfer($chat_id, $user_id, $callback_id) {
     global $pdo;
     
-    // Показываем выбор суммы
     $text = "📨 <b>Переслать деньги</b>\n\n";
     $text .= "Ты можешь отправить деньги любому пользователю Telegram через пересылку сообщения.\n";
     $text .= "Если пользователь не зарегистрирован — он получит деньги после регистрации.\n\n";
@@ -364,7 +354,6 @@ function createInviteTransfer($chat_id, $user_id, $callback_id) {
 function createInviteTransferWithAmount($chat_id, $user_id, $amount, $callback_id) {
     global $pdo;
     
-    // Проверяем лимит на сегодня
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM invite_transfers WHERE sender_id = ? AND DATE(created_at) = CURDATE()");
     $stmt->execute([$user_id]);
     $today_count = $stmt->fetchColumn();
@@ -375,7 +364,6 @@ function createInviteTransferWithAmount($chat_id, $user_id, $amount, $callback_i
         return;
     }
     
-    // Проверяем баланс
     $balance = getUserBalance($user_id);
     $fee = $amount * INVITE_TRANSFER_FEE;
     $total_with_fee = $amount + $fee;
@@ -386,20 +374,16 @@ function createInviteTransferWithAmount($chat_id, $user_id, $amount, $callback_i
         return;
     }
     
-    // Получаем username отправителя
     $stmt = $pdo->prepare("SELECT username FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $sender_username = $stmt->fetchColumn();
     
-    // Генерируем код
     $code = strtoupper(bin2hex(random_bytes(4)));
     
-    // Создаём запись
     $stmt = $pdo->prepare("INSERT INTO invite_transfers (sender_id, amount, code, status, created_at, expires_at) VALUES (?, ?, ?, 'pending', NOW(), DATE_ADD(NOW(), INTERVAL ? HOUR))");
     $stmt->execute([$user_id, $amount, $code, INVITE_TRANSFER_EXPIRE]);
     $transfer_id = $pdo->lastInsertId();
     
-    // Списываем сумму (с комиссией)
     $stmt = $pdo->prepare("UPDATE users SET balance = balance - ? WHERE id = ?");
     $stmt->execute([$total_with_fee, $user_id]);
     
@@ -424,7 +408,6 @@ function createInviteTransferWithAmount($chat_id, $user_id, $amount, $callback_i
 function processInviteTransfer($chat_id, $user_id, $code) {
     global $pdo;
     
-    // Находим перевод по коду
     $stmt = $pdo->prepare("SELECT * FROM invite_transfers WHERE code = ? AND status = 'pending' AND expires_at > NOW()");
     $stmt->execute([$code]);
     $transfer = $stmt->fetch();
@@ -439,19 +422,17 @@ function processInviteTransfer($chat_id, $user_id, $code) {
         return;
     }
     
-    // Начисляем деньги
     $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
     $stmt->execute([$transfer['amount'], $user_id]);
     
-    // Обновляем статус
     $stmt = $pdo->prepare("UPDATE invite_transfers SET status = 'completed' WHERE id = ?");
     $stmt->execute([$transfer['id']]);
     
-    // Транзакция получателю
-    $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'invite_transfer_receive', 'Получен Invite Transfer от #' . ?, NOW())");
-    $stmt->execute([$user_id, $transfer['amount'], $transfer['sender_id']]);
+    // ИСПРАВЛЕНО: убрана конкатенация с точкой
+    $desc = 'Получен Invite Transfer от #' . $transfer['sender_id'];
+    $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'invite_transfer_receive', ?, NOW())");
+    $stmt->execute([$user_id, $transfer['amount'], $desc]);
     
-    // Уведомление отправителю
     $stmt = $pdo->prepare("SELECT username FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $receiver_username = $stmt->fetchColumn();
@@ -469,7 +450,6 @@ function handleDuels($chat_id, $user_id) {
     
     checkAndCompleteQuest($user_id, 'check_duels');
     
-    // Проверяем условия для участия в дуэлях
     if (!checkDuelRequirements($user_id)) {
         $text = "🏆 <b>Дуэли</b>\n\n❌ Ты не соответствуешь требованиям для участия в дуэлях:\n";
         $text .= "• Минимум 7 дней в проекте\n";
@@ -480,7 +460,6 @@ function handleDuels($chat_id, $user_id) {
         return;
     }
     
-    // Проверяем активные дуэли пользователя
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM duels WHERE (user1_id = ? OR user2_id = ?) AND status = 'active'");
     $stmt->execute([$user_id, $user_id]);
     $active_duels = $stmt->fetchColumn();
@@ -490,7 +469,6 @@ function handleDuels($chat_id, $user_id) {
         return;
     }
     
-    // Проверяем лимит дуэлей в день
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM duels WHERE (user1_id = ? OR user2_id = ?) AND DATE(started_at) = CURDATE()");
     $stmt->execute([$user_id, $user_id]);
     $daily_duels = $stmt->fetchColumn();
@@ -500,7 +478,6 @@ function handleDuels($chat_id, $user_id) {
         return;
     }
     
-    // Показываем меню дуэлей
     $text = "🏆 <b>Дуэли</b>\n\n";
     $text .= "💰 Выбери сумму ставки:\n";
     $text .= "Мин. ставка: " . formatRub(DUEL_MIN_BET) . "\n";
@@ -509,7 +486,6 @@ function handleDuels($chat_id, $user_id) {
     $text .= "Победитель определяется по количеству приведённых рефералов за 24 часа.\n";
     $text .= "Рейтинг: победа +50, поражение -50.";
     
-    // Показываем доступные дуэли для присоединения
     $stmt = $pdo->prepare("SELECT d.*, u.username FROM duels d JOIN users u ON d.user1_id = u.id WHERE d.status = 'waiting' AND d.user1_id != ? ORDER BY d.started_at DESC LIMIT 10");
     $stmt->execute([$user_id]);
     $waiting_duels = $stmt->fetchAll();
@@ -538,19 +514,16 @@ function handleDuels($chat_id, $user_id) {
 function checkDuelRequirements($user_id) {
     global $pdo;
     
-    // 7 дней в проекте
     $stmt = $pdo->prepare("SELECT DATEDIFF(NOW(), created_at) as days FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $days = $stmt->fetchColumn();
     if ($days < 7) return false;
     
-    // 10 выполненных заданий
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM user_tasks WHERE user_id = ? AND status = 'completed'");
     $stmt->execute([$user_id]);
     $tasks = $stmt->fetchColumn();
     if ($tasks < 10) return false;
     
-    // 3 реферала
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE ref_id = ?");
     $stmt->execute([$user_id]);
     $refs = $stmt->fetchColumn();
@@ -575,26 +548,22 @@ function createDuel($chat_id, $user_id, $bet, $callback_id) {
         return;
     }
     
-    // Проверяем лимиты
     if (!checkDuelRequirements($user_id)) {
         sendMessage($chat_id, "❌ Ты не соответствуешь требованиям для дуэлей!", mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
     
-    // Создаём дуэль
     $stmt = $pdo->prepare("INSERT INTO duels (user1_id, bet, status, started_at) VALUES (?, ?, 'waiting', NOW())");
     $stmt->execute([$user_id, $bet]);
     $duel_id = $pdo->lastInsertId();
     
-    // Списываем ставку
     $stmt = $pdo->prepare("UPDATE users SET balance = balance - ? WHERE id = ?");
     $stmt->execute([$bet, $user_id]);
     
     sendMessage($chat_id, "⚔️ <b>Дуэль создана!</b>\n\n💰 Ставка: " . formatRub($bet) . "\n⏳ Ожидай соперника...\n\nСоперник будет найден автоматически!", mainKeyboard());
     botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
     
-    // Автоматически ищем соперника
     findDuelOpponent($duel_id);
 }
 
@@ -607,7 +576,6 @@ function findDuelOpponent($duel_id) {
     
     if (!$duel) return;
     
-    // Ищем соперника с похожим рейтингом
     $stmt = $pdo->prepare("SELECT u.id, u.username, (SELECT COUNT(*) FROM users WHERE ref_id = u.id) as refs, (SELECT duel_wins FROM users WHERE id = u.id) as wins 
                            FROM users u 
                            WHERE u.id != ? AND u.id NOT IN (SELECT user1_id FROM duels WHERE status = 'waiting') 
@@ -617,26 +585,20 @@ function findDuelOpponent($duel_id) {
     $opponent = $stmt->fetch();
     
     if (!$opponent) {
-        // Нет доступных соперников
         return;
     }
     
-    // Проверяем, может ли соперник участвовать
     if (!checkDuelRequirements($opponent['id'])) return;
     
-    // Проверяем баланс соперника
     $balance = getUserBalance($opponent['id']);
     if ($balance < $duel['bet']) return;
     
-    // Создаём дуэль
     $stmt = $pdo->prepare("UPDATE duels SET user2_id = ?, status = 'active' WHERE id = ?");
     $stmt->execute([$opponent['id'], $duel_id]);
     
-    // Списываем ставку с соперника
     $stmt = $pdo->prepare("UPDATE users SET balance = balance - ? WHERE id = ?");
     $stmt->execute([$duel['bet'], $opponent['id']]);
     
-    // Уведомляем обоих участников
     $stmt = $pdo->prepare("SELECT username FROM users WHERE id = ?");
     $stmt->execute([$duel['user1_id']]);
     $user1 = $stmt->fetchColumn();
@@ -685,15 +647,12 @@ function joinDuel($chat_id, $user_id, $duel_id, $callback_id) {
         return;
     }
     
-    // Запускаем дуэль
     $stmt = $pdo->prepare("UPDATE duels SET user2_id = ?, status = 'active' WHERE id = ?");
     $stmt->execute([$user_id, $duel_id]);
     
-    // Списываем ставку
     $stmt = $pdo->prepare("UPDATE users SET balance = balance - ? WHERE id = ?");
     $stmt->execute([$duel['bet'], $user_id]);
     
-    // Уведомляем
     $stmt = $pdo->prepare("SELECT username FROM users WHERE id = ?");
     $stmt->execute([$duel['user1_id']]);
     $user1 = $stmt->fetchColumn();
@@ -738,7 +697,6 @@ function showReferrals($chat_id, $user_id) {
     $text .= "💰 Доход с рефералов: <b>" . formatRub($total_income) . "</b>\n";
     $text .= "💶 ≈ " . rubToEur($total_income) . " €\n\n";
     
-    // Статусы
     $text .= "📊 <b>Статусы:</b>\n";
     $text .= "🌱 Новичок (0-5) → 15%\n";
     $text .= "📈 Активный (5-20) → 20%\n";
@@ -771,7 +729,6 @@ function handleStreak($chat_id, $user_id) {
     
     checkAndCompleteQuest($user_id, 'check_streak');
     
-    // Обновляем стрик
     updateStreak($chat_id, $user_id);
     
     $stmt = $pdo->prepare("SELECT daily_streak FROM users WHERE id = ?");
@@ -801,39 +758,30 @@ function updateStreak($chat_id, $user_id) {
     $streak = $user['daily_streak'] ?: 0;
     $vacation_date = $user['vacation_used_at'] ?? null;
     
-    // Проверяем, был ли отпуск вчера
     $yesterday = date('Y-m-d', strtotime('-1 day'));
-    $is_vacation_today = ($vacation_date && $vacation_date == $today);
     $is_vacation_yesterday = ($vacation_date && $vacation_date == $yesterday);
     
     if (!$last_date || $last_date == $today) {
-        // Первый раз или уже сегодня обновляли
         return;
     }
     
     if ($is_vacation_yesterday) {
-        // Был отпуск вчера — стрик не сбрасывается, но и не увеличивается
-        // Обновляем дату, чтобы не сбросился
         $stmt = $pdo->prepare("UPDATE users SET last_streak_date = ? WHERE id = ?");
         $stmt->execute([$today, $user_id]);
         return;
     }
     
     if ($last_date == $yesterday) {
-        // Продолжаем стрик
         $streak++;
     } else {
-        // Сброс стрика
         $streak = 1;
     }
     
-    // Проверяем награды
     $bonus = 0;
     if ($streak == 1) $bonus = STREAK_BONUS_1;
     elseif ($streak == 7) $bonus = STREAK_BONUS_7;
     elseif ($streak == 30) $bonus = STREAK_BONUS_30;
     
-    // Сохраняем
     $stmt = $pdo->prepare("UPDATE users SET daily_streak = ?, last_streak_date = ? WHERE id = ?");
     $stmt->execute([$streak, $today, $user_id]);
     
@@ -862,7 +810,6 @@ function handleQuests($chat_id, $user_id) {
     $text = "🎯 <b>Квесты (достижения)</b>\n\n";
     $text .= "Выполняй действия в боте и получай награды!\n\n";
     
-    // Получаем все квесты
     $stmt = $pdo->prepare("SELECT q.*, uq.status FROM quests q 
                            LEFT JOIN user_quests uq ON q.id = uq.quest_id AND uq.user_id = ?
                            WHERE q.is_monthly = 0 OR (q.is_monthly = 1 AND uq.status != 'completed')
@@ -887,7 +834,6 @@ function handleQuests($chat_id, $user_id) {
         $text .= "\n";
     }
     
-    // Проверяем месячные квесты
     $text .= "\n📅 <b>Ежемесячные квесты:</b>\n\n";
     $stmt = $pdo->prepare("SELECT q.*, uq.status FROM quests q 
                            LEFT JOIN user_quests uq ON q.id = uq.quest_id AND uq.user_id = ?
@@ -913,7 +859,6 @@ function handleTop($chat_id, $user_id) {
     
     $text = "🏆 <b>Топ-лидеры</b>\n\n";
     
-    // Топ по рефералам
     $text .= "👥 <b>Топ по рефералам:</b>\n";
     $stmt = $pdo->prepare("SELECT u.id, u.username, COUNT(r.id) as refs 
                            FROM users u 
@@ -930,7 +875,6 @@ function handleTop($chat_id, $user_id) {
         $i++;
     }
     
-    // Топ по заработку
     $text .= "\n💰 <b>Топ по заработку:</b>\n";
     $stmt = $pdo->prepare("SELECT u.username, COALESCE(SUM(t.amount), 0) as earned 
                            FROM users u 
@@ -947,7 +891,6 @@ function handleTop($chat_id, $user_id) {
         $i++;
     }
     
-    // Топ по дуэлям
     $text .= "\n⚔️ <b>Топ по дуэлям (победы):</b>\n";
     $stmt = $pdo->prepare("SELECT u.username, u.duel_wins, u.duel_losses 
                            FROM users u 
@@ -983,7 +926,6 @@ function handleCases($chat_id, $user_id) {
     $text .= "🔑 Твои ключи: <b>" . $keys . "</b>\n";
     $text .= "💡 1 ключ выдаётся за каждое выполненное задание!\n\n";
     
-    // Получаем доступные кейсы
     $stmt = $pdo->prepare("SELECT * FROM cases ORDER BY keys_required");
     $cases = $stmt->fetchAll();
     
@@ -1004,7 +946,6 @@ function handleCases($chat_id, $user_id) {
     }
     $inlineKeyboard['inline_keyboard'][] = [['text' => '🔄 Обновить', 'callback_data' => 'cases_refresh']];
     
-    // Последние открытые кейсы
     $stmt = $pdo->prepare("SELECT uc.*, c.name, c.emoji FROM user_cases uc 
                            JOIN cases c ON uc.case_id = c.id 
                            WHERE uc.user_id = ? 
@@ -1026,7 +967,6 @@ function handleCases($chat_id, $user_id) {
 function openCase($chat_id, $user_id, $case_id, $callback_id) {
     global $pdo;
     
-    // Проверяем кейс
     $stmt = $pdo->prepare("SELECT * FROM cases WHERE id = ?");
     $stmt->execute([$case_id]);
     $case = $stmt->fetch();
@@ -1037,7 +977,6 @@ function openCase($chat_id, $user_id, $case_id, $callback_id) {
         return;
     }
     
-    // Проверяем ключи
     $stmt = $pdo->prepare("SELECT cases_keys FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $keys = $stmt->fetchColumn() ?: 0;
@@ -1048,19 +987,15 @@ function openCase($chat_id, $user_id, $case_id, $callback_id) {
         return;
     }
     
-    // Списываем ключи
     $stmt = $pdo->prepare("UPDATE users SET cases_keys = cases_keys - ? WHERE id = ?");
     $stmt->execute([$case['keys_required'], $user_id]);
     
-    // Генерируем награду
     $reward = mt_rand($case['min_reward'], $case['max_reward']);
     $reward = floor($reward);
     
-    // Начисляем награду
     $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
     $stmt->execute([$reward, $user_id]);
     
-    // Сохраняем историю
     $stmt = $pdo->prepare("INSERT INTO user_cases (user_id, case_id, reward_amount, opened_at) VALUES (?, ?, ?, NOW())");
     $stmt->execute([$user_id, $case_id, $reward]);
     
@@ -1068,7 +1003,6 @@ function openCase($chat_id, $user_id, $case_id, $callback_id) {
     $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'case_reward', ?, NOW())");
     $stmt->execute([$user_id, $reward, $desc]);
     
-    // Получаем обновленное количество ключей
     $stmt = $pdo->prepare("SELECT cases_keys FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $new_keys = $stmt->fetchColumn() ?: 0;
@@ -1293,14 +1227,12 @@ function doTask($chat_id, $user_id, $task_id, $username, $callback_id) {
         }
     }
     
-    // АВТОПОДТВЕРЖДЕНИЕ
     $stmt = $pdo->prepare("INSERT INTO user_tasks (user_id, task_id, status, completed_at) VALUES (?, ?, 'completed', NOW())");
     $stmt->execute([$user_id, $task_id]);
     
     $stmt = $pdo->prepare("UPDATE tasks SET completed_count = completed_count + 1 WHERE id = ?");
     $stmt->execute([$task_id]);
     
-    // Начисляем награду
     $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
     $stmt->execute([$task['reward'], $user_id]);
     
@@ -1308,11 +1240,9 @@ function doTask($chat_id, $user_id, $task_id, $username, $callback_id) {
     $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'task', ?, NOW())");
     $stmt->execute([$user_id, $task['reward'], $desc]);
     
-    // Выдаём ключ за задание
     $stmt = $pdo->prepare("UPDATE users SET cases_keys = cases_keys + ? WHERE id = ?");
     $stmt->execute([CASES_KEYS_PER_TASK, $user_id]);
     
-    // Реферальный бонус (по новому проценту)
     $stmt = $pdo->prepare("SELECT ref_id FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $ref_id = $stmt->fetchColumn();
@@ -1404,7 +1334,6 @@ function checkSubscriptionCallback($chat_id, $user_id, $task_id, $callback_id) {
         $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'task', ?, NOW())");
         $stmt->execute([$user_id, $task['reward'], $desc]);
         
-        // Ключ за задание
         $stmt = $pdo->prepare("UPDATE users SET cases_keys = cases_keys + ? WHERE id = ?");
         $stmt->execute([CASES_KEYS_PER_TASK, $user_id]);
         
