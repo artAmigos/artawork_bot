@@ -239,11 +239,11 @@ function checkUserDaysRequirement($user_id, $required_days) {
     return $days >= $required_days;
 }
 
-// Функция для проверки и выполнения квестов
+// Функция для проверки и выполнения квестов (ИСПРАВЛЕНА)
 function checkAndCompleteQuest($user_id, $quest_key) {
     global $pdo;
     
-    $stmt = $pdo->prepare("SELECT q.id, q.reward FROM quests q 
+    $stmt = $pdo->prepare("SELECT q.id, q.reward, q.name, q.is_monthly, q.requirement_days FROM quests q 
                            LEFT JOIN user_quests uq ON q.id = uq.quest_id AND uq.user_id = ? AND uq.status = 'completed'
                            WHERE q.`key` = ? AND uq.id IS NULL");
     $stmt->execute([$user_id, $quest_key]);
@@ -251,15 +251,11 @@ function checkAndCompleteQuest($user_id, $quest_key) {
     
     if ($quest) {
         // Проверяем условие для месячных квестов
-        $stmt = $pdo->prepare("SELECT is_monthly, requirement_days FROM quests WHERE id = ?");
-        $stmt->execute([$quest['id']]);
-        $quest_data = $stmt->fetch();
-        
-        if ($quest_data['is_monthly'] == 1) {
+        if ($quest['is_monthly'] == 1) {
             $stmt = $pdo->prepare("SELECT DATEDIFF(NOW(), created_at) as days FROM users WHERE id = ?");
             $stmt->execute([$user_id]);
             $days = $stmt->fetchColumn();
-            if ($days < $quest_data['requirement_days']) {
+            if ($days < $quest['requirement_days']) {
                 return false;
             }
         }
@@ -271,7 +267,7 @@ function checkAndCompleteQuest($user_id, $quest_key) {
         $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
         $stmt->execute([$quest['reward'], $user_id]);
         
-        $desc = 'Квест: ' . $quest_data['name'] ?? $quest_key;
+        $desc = 'Квест: ' . $quest['name'];
         $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'quest', ?, NOW())");
         $stmt->execute([$user_id, $quest['reward'], $desc]);
         
