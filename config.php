@@ -36,7 +36,7 @@ define('DUEL_DURATION', 24); // часов
 define('DUEL_WIN_POINTS', 50);
 define('DUEL_LOSS_POINTS', -50);
 
-// Настройки переводов (P2P) - УПРОЩАЕМ!
+// Настройки переводов (P2P)
 define('TRANSFER_MIN_AMOUNT', 10);
 define('TRANSFER_MAX_AMOUNT', 5000);
 define('TRANSFER_DAILY_LIMIT', 10);
@@ -44,7 +44,7 @@ define('TRANSFER_DAILY_SUM_LIMIT', 10000);
 define('TRANSFER_CONFIRM_TIME', 5); // минут
 define('TRANSFER_COOLDOWN', 3600); // 1 час в секундах
 
-// Настройки invite transfer (Переслать деньги) - ОСНОВНОЙ СПОСОБ!
+// Настройки invite transfer (Переслать деньги)
 define('INVITE_TRANSFER_DAILY_LIMIT', 5);
 define('INVITE_TRANSFER_EXPIRE', 24); // часов
 define('INVITE_TRANSFER_FEE', 0.02); // 2% комиссия
@@ -52,12 +52,62 @@ define('INVITE_TRANSFER_FEE', 0.02); // 2% комиссия
 // Настройки кейсов
 define('CASES_KEYS_PER_TASK', 1); // 1 ключ за задание
 
-// Подключение к БД
-try {
-    $pdo = new PDO("mysql:host=".DB_HOST.";dbname=".DB_NAME, DB_USER, DB_PASS);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch(PDOException $e) {
-    die("Ошибка подключения: " . $e->getMessage());
+// ============================================================
+// ПОДКЛЮЧЕНИЕ К БД С ПЕРЕПОДКЛЮЧЕНИЕМ
+// ============================================================
+function getDBConnection() {
+    try {
+        $pdo = new PDO("mysql:host=".DB_HOST.";dbname=".DB_NAME, DB_USER, DB_PASS);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo->setAttribute(PDO::ATTR_TIMEOUT, 30);
+        $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+        // Устанавливаем время ожидания для MySQL
+        $pdo->query("SET SESSION wait_timeout = 28800");
+        $pdo->query("SET SESSION interactive_timeout = 28800");
+        return $pdo;
+    } catch(PDOException $e) {
+        die("Ошибка подключения: " . $e->getMessage());
+    }
+}
+
+// Инициализация PDO
+$pdo = getDBConnection();
+
+// Функция для переподключения к БД при потере соединения
+function reconnectDB() {
+    global $pdo;
+    try {
+        $pdo->query("SELECT 1");
+        return true;
+    } catch (PDOException $e) {
+        if ($e->getCode() == 'HY000' || strpos($e->getMessage(), 'gone away') !== false) {
+            // Переподключаемся
+            $pdo = getDBConnection();
+            return true;
+        }
+        return false;
+    }
+}
+
+// Безопасный запрос к БД с переподключением
+function safeQuery($sql, $params = []) {
+    global $pdo;
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt;
+    } catch (PDOException $e) {
+        if (strpos($e->getMessage(), 'gone away') !== false || $e->getCode() == 'HY000') {
+            // Переподключаемся
+            reconnectDB();
+            // Повторяем запрос
+            global $pdo;
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            return $stmt;
+        }
+        throw $e;
+    }
 }
 
 // ============================================================
@@ -239,41 +289,46 @@ function checkUserDaysRequirement($user_id, $required_days) {
     return $days >= $required_days;
 }
 
-// Функция для проверки и выполнения квестов (ИСПРАВЛЕНА)
+// Функция для проверки и выполнения квестов (ИСПРАВЛЕНА с try-catch)
 function checkAndCompleteQuest($user_id, $quest_key) {
     global $pdo;
     
-    $stmt = $pdo->prepare("SELECT q.id, q.reward, q.name, q.is_monthly, q.requirement_days FROM quests q 
-                           LEFT JOIN user_quests uq ON q.id = uq.quest_id AND uq.user_id = ? AND uq.status = 'completed'
-                           WHERE q.`key` = ? AND uq.id IS NULL");
-    $stmt->execute([$user_id, $quest_key]);
-    $quest = $stmt->fetch();
-    
-    if ($quest) {
-        // Проверяем условие для месячных квестов
-        if ($quest['is_monthly'] == 1) {
-            $stmt = $pdo->prepare("SELECT DATEDIFF(NOW(), created_at) as days FROM users WHERE id = ?");
-            $stmt->execute([$user_id]);
-            $days = $stmt->fetchColumn();
-            if ($days < $quest['requirement_days']) {
-                return false;
+    try {
+        $stmt = $pdo->prepare("SELECT q.id, q.reward, q.name, q.is_monthly, q.requirement_days FROM quests q 
+                               LEFT JOIN user_quests uq ON q.id = uq.quest_id AND uq.user_id = ? AND uq.status = 'completed'
+                               WHERE q.`key` = ? AND uq.id IS NULL");
+        $stmt->execute([$user_id, $quest_key]);
+        $quest = $stmt->fetch();
+        
+        if ($quest) {
+            // Проверяем условие для месячных квестов
+            if ($quest['is_monthly'] == 1) {
+                $stmt = $pdo->prepare("SELECT DATEDIFF(NOW(), created_at) as days FROM users WHERE id = ?");
+                $stmt->execute([$user_id]);
+                $days = $stmt->fetchColumn();
+                if ($days < $quest['requirement_days']) {
+                    return false;
+                }
             }
+            
+            $stmt = $pdo->prepare("INSERT INTO user_quests (user_id, quest_id, status, completed_at) VALUES (?, ?, 'completed', NOW())");
+            $stmt->execute([$user_id, $quest['id']]);
+            
+            // Начисляем награду
+            $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
+            $stmt->execute([$quest['reward'], $user_id]);
+            
+            $desc = 'Квест: ' . $quest['name'];
+            $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'quest', ?, NOW())");
+            $stmt->execute([$user_id, $quest['reward'], $desc]);
+            
+            return true;
         }
-        
-        $stmt = $pdo->prepare("INSERT INTO user_quests (user_id, quest_id, status, completed_at) VALUES (?, ?, 'completed', NOW())");
-        $stmt->execute([$user_id, $quest['id']]);
-        
-        // Начисляем награду
-        $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
-        $stmt->execute([$quest['reward'], $user_id]);
-        
-        $desc = 'Квест: ' . $quest['name'];
-        $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'quest', ?, NOW())");
-        $stmt->execute([$user_id, $quest['reward'], $desc]);
-        
-        return true;
+        return false;
+    } catch (PDOException $e) {
+        error_log("checkAndCompleteQuest error: " . $e->getMessage());
+        return false;
     }
-    return false;
 }
 
 // Функция для получения реферального процента по статусу
