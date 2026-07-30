@@ -62,41 +62,42 @@ if (isset($_GET['action'])) {
         exit;
     }
     
-    // РУЧНОЕ ПОДТВЕРЖДЕНИЕ задания (для случаев когда бот не админ)
+    // РУЧНОЕ ПОДТВЕРЖДЕНИЕ задания
     if ($action == 'approve_task' && isset($_GET['id'])) {
         $user_task_id = $_GET['id'];
         
-        // Получаем данные
         $stmt = $pdo->prepare("SELECT ut.*, t.reward, t.title, u.id as user_id FROM user_tasks ut JOIN tasks t ON ut.task_id = t.id JOIN users u ON ut.user_id = u.id WHERE ut.id = ?");
         $stmt->execute([$user_task_id]);
         $data = $stmt->fetch();
         
         if ($data) {
-            // Начисляем награду
             $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
             $stmt->execute([$data['reward'], $data['user_id']]);
             
-            // Обновляем статус
             $stmt = $pdo->prepare("UPDATE user_tasks SET status = 'completed' WHERE id = ?");
             $stmt->execute([$user_task_id]);
             
-            // Добавляем транзакцию
             $desc = 'Выполнение задания (ручное подтверждение): ' . $data['title'];
             $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'task', ?, NOW())");
             $stmt->execute([$data['user_id'], $data['reward'], $desc]);
             
-            // Начисляем реферальный бонус (25%)
+            // Выдаём ключ за задание
+            $stmt = $pdo->prepare("UPDATE users SET cases_keys = cases_keys + ? WHERE id = ?");
+            $stmt->execute([CASES_KEYS_PER_TASK, $data['user_id']]);
+            
+            // Реферальный бонус
             $stmt = $pdo->prepare("SELECT ref_id FROM users WHERE id = ?");
             $stmt->execute([$data['user_id']]);
             $ref_id = $stmt->fetchColumn();
             
             if ($ref_id > 0) {
-                $ref_bonus = $data['reward'] * 0.25;
+                $ref_percent = getReferralPercent($ref_id);
+                $ref_bonus = $data['reward'] * ($ref_percent / 100);
                 
                 $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
                 $stmt->execute([$ref_bonus, $ref_id]);
                 
-                $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'ref_bonus', 'Бонус за реферала (25%)', NOW())");
+                $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'ref_bonus', 'Бонус за реферала (" . $ref_percent . "%)', NOW())");
                 $stmt->execute([$ref_id, $ref_bonus]);
                 
                 $stmt = $pdo->prepare("INSERT INTO referrals (user_id, ref_user_id, income, created_at) VALUES (?, ?, ?, NOW())");
@@ -115,6 +116,7 @@ if (isset($_GET['action'])) {
                 if ($ref_id > 0) {
                     $text .= "👥 Реферальный бонус: <b>" . formatRub($ref_bonus) . "</b>\n";
                 }
+                $text .= "🔑 Получен ключ для кейса!\n";
                 $text .= "\n💵 Твой баланс обновлён!";
                 sendMessage($user['telegram_id'], $text, mainKeyboard());
             }
@@ -130,16 +132,13 @@ if (isset($_GET['action'])) {
     if ($action == 'reject_task' && isset($_GET['id'])) {
         $user_task_id = $_GET['id'];
         
-        // Получаем данные для уведомления
         $stmt = $pdo->prepare("SELECT ut.*, t.title, u.id as user_id, u.telegram_id FROM user_tasks ut JOIN tasks t ON ut.task_id = t.id JOIN users u ON ut.user_id = u.id WHERE ut.id = ?");
         $stmt->execute([$user_task_id]);
         $data = $stmt->fetch();
         
-        // Обновляем статус
         $stmt = $pdo->prepare("UPDATE user_tasks SET status = 'rejected' WHERE id = ?");
         $stmt->execute([$user_task_id]);
         
-        // Уведомляем пользователя
         if ($data && $data['telegram_id']) {
             $text = "❌ <b>Задание отклонено администратором!</b>\n\n";
             $text .= "📌 Задание: " . $data['title'] . "\n";
@@ -156,7 +155,6 @@ if (isset($_GET['action'])) {
         $stmt = $pdo->prepare("UPDATE withdraws SET status = 'approved' WHERE id = ?");
         $stmt->execute([$_GET['id']]);
         
-        // Уведомляем пользователя
         $stmt = $pdo->prepare("SELECT w.*, u.telegram_id, u.username FROM withdraws w JOIN users u ON w.user_id = u.id WHERE w.id = ?");
         $stmt->execute([$_GET['id']]);
         $data = $stmt->fetch();
@@ -178,7 +176,6 @@ if (isset($_GET['action'])) {
         $stmt = $pdo->prepare("UPDATE withdraws SET status = 'rejected' WHERE id = ?");
         $stmt->execute([$_GET['id']]);
         
-        // Возвращаем средства пользователю
         $stmt = $pdo->prepare("SELECT user_id, amount, telegram_id, username FROM withdraws w JOIN users u ON w.user_id = u.id WHERE w.id = ?");
         $stmt->execute([$_GET['id']]);
         $data = $stmt->fetch();
@@ -187,7 +184,6 @@ if (isset($_GET['action'])) {
             $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
             $stmt->execute([$data['amount'], $data['user_id']]);
             
-            // Уведомляем пользователя
             if ($data['telegram_id']) {
                 $text = "❌ <b>Ваша заявка на вывод отклонена!</b>\n\n";
                 $text .= "💰 Сумма: <b>" . formatRub($data['amount']) . "</b>\n";
@@ -230,6 +226,9 @@ if (isset($_GET['action'])) {
 try {
     $pdo->query("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_withdraw_method VARCHAR(50) DEFAULT NULL");
     $pdo->query("ALTER TABLE users ADD COLUMN IF NOT EXISTS withdraw_waiting_text VARCHAR(10) DEFAULT NULL");
+    $pdo->query("ALTER TABLE users ADD COLUMN IF NOT EXISTS cases_keys INT DEFAULT 0");
+    $pdo->query("ALTER TABLE users ADD COLUMN IF NOT EXISTS duel_wins INT DEFAULT 0");
+    $pdo->query("ALTER TABLE users ADD COLUMN IF NOT EXISTS duel_losses INT DEFAULT 0");
     $pdo->query("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS requirement_days INT DEFAULT 0");
 } catch (PDOException $e) {}
 
@@ -458,13 +457,12 @@ $total_withdraws = $pdo->query("SELECT SUM(amount) FROM withdraws WHERE status =
         </div>
     </div>
     
-    <!-- Вкладка: Проверка (РУЧНАЯ) -->
+    <!-- Вкладка: Проверка -->
     <div id="tab-pending" class="tab-content <?= count($pending_tasks) > 0 ? 'active' : '' ?>">
         <div class="card">
             <h2>⏳ Задания на ручной проверке</h2>
             <p style="color: #7f8c8d; margin-bottom: 15px;">
                 🔹 Здесь отображаются задания, которые требуют ручной проверки администратором.<br>
-                🔹 Это происходит когда бот не может автоматически проверить подписку (не добавлен в канал как администратор).<br>
                 🔹 Проверьте, что пользователь действительно выполнил условие, затем подтвердите или отклоните.
             </p>
             <?php if (count($pending_tasks) == 0): ?>
@@ -494,7 +492,6 @@ $total_withdraws = $pdo->query("SELECT SUM(amount) FROM withdraws WHERE status =
                         <td><?= date('d.m.Y H:i', strtotime($pt['completed_at'])) ?></td>
                         <td>
                             <?php
-                            // Пытаемся получить ссылку на канал
                             $stmt2 = $pdo->prepare("SELECT channel_id FROM tasks WHERE id = ?");
                             $stmt2->execute([$pt['task_id']]);
                             $channel_id = $stmt2->fetchColumn();
@@ -511,7 +508,7 @@ $total_withdraws = $pdo->query("SELECT SUM(amount) FROM withdraws WHERE status =
                         </td>
                         <td>
                             <a href="?action=approve_task&id=<?= $pt['id'] ?>" class="btn btn-success btn-sm" onclick="return confirm('Подтвердить выполнение и начислить награду?')">✅ Подтвердить</a>
-                            <a href="?action=reject_task&id=<?= $pt['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Отклонить выполнение? Пользователь получит уведомление.')">❌ Отклонить</a>
+                            <a href="?action=reject_task&id=<?= $pt['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Отклонить выполнение?')">❌ Отклонить</a>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -631,6 +628,7 @@ $total_withdraws = $pdo->query("SELECT SUM(amount) FROM withdraws WHERE status =
                         <th>ID</th>
                         <th>Username</th>
                         <th>Баланс</th>
+                        <th>Ключи</th>
                         <th>Заработал</th>
                         <th>Рефералов</th>
                         <th>Дней</th>
@@ -643,6 +641,7 @@ $total_withdraws = $pdo->query("SELECT SUM(amount) FROM withdraws WHERE status =
                         <td>#<?= $user['id'] ?></td>
                         <td>@<?= htmlspecialchars($user['username']) ?></td>
                         <td><span class="rub"><?= formatRub($user['balance']) ?></span></td>
+                        <td><?= $user['cases_keys'] ?? 0 ?></td>
                         <td><span class="rub"><?= formatRub($user['earned'] ?? 0) ?></span></td>
                         <td><?= $user['refs'] ?></td>
                         <td><?= round((time() - strtotime($user['created_at'])) / 86400) ?></td>
