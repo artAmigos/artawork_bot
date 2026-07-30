@@ -37,7 +37,7 @@ try {
     die("Ошибка подключения: " . $e->getMessage());
 }
 
-// Функция для запросов к Telegram API
+// Функция для запросов к Telegram API (ИСПРАВЛЕНА)
 function botRequest($method, $data = []) {
     $url = "https://api.telegram.org/bot" . BOT_TOKEN . "/" . $method;
     
@@ -46,17 +46,35 @@ function botRequest($method, $data = []) {
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
     curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    
+    // ========== ИСПРАВЛЕНИЕ ОШИБКИ SSL ==========
+    // Отключаем проверку SSL (временное решение для self-signed сертификатов)
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    
+    // ИЛИ используй CA bundle (более правильный способ):
+    // curl_setopt($ch, CURLOPT_CAINFO, '/etc/ssl/certs/ca-bundle.crt');
+    // ===========================================
     
     $result = curl_exec($ch);
     $error = curl_error($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
     
     if ($error) {
+        // Логируем ошибку для отладки
+        error_log("CURL Error: " . $error);
         throw new Exception("CURL Error: " . $error);
     }
     
-    return json_decode($result, true);
+    $decoded = json_decode($result, true);
+    
+    // Проверяем, не вернула ли API ошибку
+    if (isset($decoded['error_code'])) {
+        error_log("Telegram API Error: " . $decoded['description']);
+    }
+    
+    return $decoded;
 }
 
 // Функция для отправки сообщения
@@ -153,7 +171,6 @@ function getUserRank($user_id) {
 }
 
 // Функция для регистрации пользователя
-// Функция для регистрации пользователя
 function registerUser($telegram_id, $username) {
     global $pdo;
     
@@ -166,7 +183,6 @@ function registerUser($telegram_id, $username) {
         $ref_id = isset($_GET['ref']) ? (int)$_GET['ref'] : 0;
         
         // Также проверяем в тексте сообщения (для ссылок из бота)
-        // Этот параметр передаётся через start
         if ($ref_id == 0 && isset($_GET['start'])) {
             $start = $_GET['start'];
             if (strpos($start, 'ref_') === 0) {
@@ -191,7 +207,7 @@ function registerUser($telegram_id, $username) {
     return $user['id'];
 }
 
-// Функция для проверки подписки на канал/группу (РЕАЛЬНАЯ ПРОВЕРКА)
+// Функция для проверки подписки на канал/группу
 function checkSubscription($user_id, $channel_id) {
     global $pdo;
     $stmt = $pdo->prepare("SELECT telegram_id FROM users WHERE id = ?");
@@ -201,36 +217,29 @@ function checkSubscription($user_id, $channel_id) {
     if (!$telegram_id) return false;
     
     try {
-        // Пытаемся получить информацию о членстве
         $result = botRequest('getChatMember', [
             'chat_id' => $channel_id,
             'user_id' => $telegram_id
         ]);
         
-        // Если есть ошибка - бот не может проверить
         if (isset($result['error_code'])) {
-            // Если бот не админ - возвращаем false (не можем проверить)
             if ($result['error_code'] == 400) {
                 return false;
             }
             return false;
         }
         
-        // Проверяем статус
         if (isset($result['result']['status'])) {
             $status = $result['result']['status'];
-            // Подписан, если статус member, administrator, creator
             return in_array($status, ['member', 'administrator', 'creator']);
         }
         
         return false;
     } catch (Exception $e) {
-        // В случае ошибки - не подписан
         return false;
     }
 }
 
-// Функция для проверки, может ли бот проверить подписку
 // Функция для проверки, может ли бот проверить подписку
 function canCheckSubscription($channel_id) {
     try {
@@ -238,7 +247,6 @@ function canCheckSubscription($channel_id) {
             'chat_id' => $channel_id
         ]);
         
-        // Если есть ошибка - бот не может проверить
         if (isset($result['error_code'])) {
             return false;
         }
