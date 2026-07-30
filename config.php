@@ -37,7 +37,9 @@ try {
     die("Ошибка подключения: " . $e->getMessage());
 }
 
-// Функция для запросов к Telegram API (ИСПРАВЛЕНА)
+/**
+ * Функция для запросов к Telegram API (ИСПРАВЛЕНА - SSL)
+ */
 function botRequest($method, $data = []) {
     $url = "https://api.telegram.org/bot" . BOT_TOKEN . "/" . $method;
     
@@ -47,14 +49,39 @@ function botRequest($method, $data = []) {
     curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
     curl_setopt($ch, CURLOPT_TIMEOUT, 30);
     
-    // ========== ИСПРАВЛЕНИЕ ОШИБКИ SSL ==========
-    // Отключаем проверку SSL (временное решение для self-signed сертификатов)
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    // ============================================================
+    // ИСПРАВЛЕНИЕ ОШИБКИ SSL: self-signed certificate in chain
+    // ============================================================
     
-    // ИЛИ используй CA bundle (более правильный способ):
-    // curl_setopt($ch, CURLOPT_CAINFO, '/etc/ssl/certs/ca-bundle.crt');
-    // ===========================================
+    // 1. Пытаемся использовать системные сертификаты (правильный способ)
+    $ca_bundle_paths = [
+        '/etc/ssl/certs/ca-bundle.crt',           // Amazon Linux / CentOS / RHEL
+        '/etc/ssl/certs/ca-certificates.crt',     // Ubuntu / Debian
+        '/etc/pki/tls/certs/ca-bundle.crt',       // RHEL / CentOS
+        '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem', // RHEL 8+
+    ];
+    
+    $ca_found = false;
+    foreach ($ca_bundle_paths as $path) {
+        if (file_exists($path)) {
+            curl_setopt($ch, CURLOPT_CAINFO, $path);
+            $ca_found = true;
+            break;
+        }
+    }
+    
+    // 2. Если системные сертификаты не найдены, отключаем проверку SSL
+    //    (НЕ РЕКОМЕНДУЕТСЯ в продакшене, но как fallback)
+    if (!$ca_found) {
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    } else {
+        // Используем системные сертификаты
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    }
+    
+    // ============================================================
     
     $result = curl_exec($ch);
     $error = curl_error($ch);
@@ -62,14 +89,31 @@ function botRequest($method, $data = []) {
     curl_close($ch);
     
     if ($error) {
-        // Логируем ошибку для отладки
         error_log("CURL Error: " . $error);
-        throw new Exception("CURL Error: " . $error);
+        // Если ошибка SSL, пробуем отключить проверку как последний шанс
+        if (strpos($error, 'SSL') !== false) {
+            // Делаем повторный запрос с отключенной проверкой
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+            $result = curl_exec($ch);
+            $error = curl_error($ch);
+            curl_close($ch);
+            
+            if ($error) {
+                throw new Exception("CURL Error (SSL fallback): " . $error);
+            }
+        } else {
+            throw new Exception("CURL Error: " . $error);
+        }
     }
     
     $decoded = json_decode($result, true);
     
-    // Проверяем, не вернула ли API ошибку
     if (isset($decoded['error_code'])) {
         error_log("Telegram API Error: " . $decoded['description']);
     }
@@ -179,10 +223,8 @@ function registerUser($telegram_id, $username) {
     $user = $stmt->fetch();
     
     if (!$user) {
-        // Проверяем реферальную ссылку из GET параметра
         $ref_id = isset($_GET['ref']) ? (int)$_GET['ref'] : 0;
         
-        // Также проверяем в тексте сообщения (для ссылок из бота)
         if ($ref_id == 0 && isset($_GET['start'])) {
             $start = $_GET['start'];
             if (strpos($start, 'ref_') === 0) {
@@ -190,12 +232,10 @@ function registerUser($telegram_id, $username) {
             }
         }
         
-        // Создаём пользователя
         $stmt = $pdo->prepare("INSERT INTO users (telegram_id, username, ref_id, created_at) VALUES (?, ?, ?, NOW())");
         $stmt->execute([$telegram_id, $username, $ref_id]);
         $user_id = $pdo->lastInsertId();
         
-        // Начисляем бонус за регистрацию
         $stmt = $pdo->prepare("UPDATE users SET balance = balance + 50 WHERE id = ?");
         $stmt->execute([$user_id]);
         
