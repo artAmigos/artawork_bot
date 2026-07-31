@@ -15,6 +15,73 @@ function processUpdate($update) {
         // Регистрируем пользователя
         $user_id = registerUser($chat_id, $username);
         
+        // ============================================
+        // === КОМАНДА ДЛЯ МАССОВОЙ РАССЫЛКИ (ТОЛЬКО ДЛЯ АДМИНА) ===
+        // ============================================
+        if (strpos($text, '/mail') === 0 && $chat_id == ADMIN_ID) {
+            // Получаем текст рассылки (убираем команду)
+            $mail_text = trim(substr($text, 5));
+            
+            if (empty($mail_text)) {
+                sendMessage($chat_id, "❌ <b>Укажите текст для рассылки!</b>\n\nПример:\n<code>/mail Привет всем! 🚀</code>", mainKeyboard());
+                return;
+            }
+            
+            // Проверяем, есть ли параметр типа получателей
+            $message_type = 'all';
+            $lines = explode("\n", $mail_text);
+            $first_line = $lines[0] ?? '';
+            
+            if (strpos($first_line, '[active]') !== false) {
+                $message_type = 'active';
+                $mail_text = str_replace('[active]', '', $mail_text);
+                $mail_text = trim($mail_text);
+            } elseif (strpos($first_line, '[new]') !== false) {
+                $message_type = 'new';
+                $mail_text = str_replace('[new]', '', $mail_text);
+                $mail_text = trim($mail_text);
+            }
+            
+            // Подтверждение перед отправкой
+            $stmt = $pdo->query("SELECT COUNT(*) FROM users");
+            $total_users = $stmt->fetchColumn();
+            
+            if ($total_users == 0) {
+                sendMessage($chat_id, "❌ Нет пользователей для рассылки!", mainKeyboard());
+                return;
+            }
+            
+            $type_label = $message_type == 'all' ? 'ВСЕМ' : ($message_type == 'active' ? 'АКТИВНЫМ (≥5 заданий)' : 'НОВЫМ (≥1 задание)');
+            
+            $confirm_text = "📨 <b>Массовая рассылка</b>\n\n";
+            $confirm_text .= "👥 Получатели: <b>{$type_label}</b>\n";
+            $confirm_text .= "📊 Всего: <b>{$total_users}</b> пользователей\n\n";
+            $confirm_text .= "📝 <b>Текст сообщения:</b>\n";
+            $confirm_text .= "━━━━━━━━━━━━━━━━━━━\n";
+            $confirm_text .= $mail_text . "\n";
+            $confirm_text .= "━━━━━━━━━━━━━━━━━━━\n\n";
+            $confirm_text .= "⚠️ <b>Отправить рассылку?</b>\n";
+            $confirm_text .= "Нажмите кнопку ниже для подтверждения.";
+            
+            // Сохраняем данные в глобальную переменную
+            $GLOBALS['pending_mailing'] = [
+                'chat_id' => $chat_id,
+                'text' => $mail_text,
+                'type' => $message_type,
+                'total' => $total_users
+            ];
+            
+            $inlineKeyboard = [
+                'inline_keyboard' => [
+                    [['text' => '✅ Да, отправить всем', 'callback_data' => 'mailing_confirm']],
+                    [['text' => '❌ Отмена', 'callback_data' => 'mailing_cancel']]
+                ]
+            ];
+            
+            sendMessage($chat_id, $confirm_text, $inlineKeyboard);
+            return;
+        }
+        
         // Проверяем реферальную ссылку при старте
         if (strpos($text, '/start') === 0) {
             $parts = explode(' ', $text);
@@ -130,6 +197,89 @@ function processUpdate($update) {
         if (!$user_id) {
             sendMessage($chat_id, "❌ Сначала запусти бота командой /start");
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
+        }
+        
+        // ============================================
+        // === ПОДТВЕРЖДЕНИЕ РАССЫЛКИ ===
+        // ============================================
+        if ($data == 'mailing_confirm') {
+            // Проверяем, что это админ
+            if ($chat_id != ADMIN_ID) {
+                sendMessage($chat_id, "❌ У вас нет прав для этой операции!", mainKeyboard());
+                botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+                return;
+            }
+            
+            // Получаем данные рассылки
+            $mail_data = $GLOBALS['pending_mailing'] ?? null;
+            
+            if (!$mail_data || $mail_data['chat_id'] != $chat_id) {
+                sendMessage($chat_id, "❌ Данные рассылки устарели. Отправьте команду заново.", mainKeyboard());
+                botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+                return;
+            }
+            
+            $mail_text = $mail_data['text'];
+            $message_type = $mail_data['type'];
+            
+            // Получаем список пользователей
+            if ($message_type == 'all') {
+                $stmt = $pdo->query("SELECT telegram_id, username FROM users");
+            } elseif ($message_type == 'active') {
+                $stmt = $pdo->prepare("SELECT telegram_id, username FROM users WHERE id IN (SELECT user_id FROM user_tasks WHERE status = 'completed' GROUP BY user_id HAVING COUNT(*) >= 5)");
+                $stmt->execute();
+            } else {
+                $stmt = $pdo->prepare("SELECT telegram_id, username FROM users WHERE id IN (SELECT user_id FROM user_tasks WHERE status = 'completed' GROUP BY user_id HAVING COUNT(*) >= 1)");
+                $stmt->execute();
+            }
+            
+            $users = $stmt->fetchAll();
+            $total = count($users);
+            $sent = 0;
+            $failed = 0;
+            $failed_list = [];
+            
+            // Отправляем сообщение о начале рассылки
+            sendMessage($chat_id, "📨 <b>Начинаю рассылку...</b>\n\n👥 Всего пользователей: {$total}\n⏳ Отправка может занять некоторое время.", mainKeyboard());
+            
+            foreach ($users as $user) {
+                // Отправляем сообщение от имени бота
+                $result = sendMessage($user['telegram_id'], $mail_text, mainKeyboard());
+                
+                if (isset($result['ok']) && $result['ok'] === true) {
+                    $sent++;
+                } else {
+                    $failed++;
+                    $failed_list[] = '@' . $user['username'];
+                }
+                usleep(100000); // 100мс задержка
+            }
+            
+            // Итоговое сообщение
+            $result_text = "📨 <b>Рассылка завершена!</b>\n\n";
+            $result_text .= "✅ Отправлено: <b>{$sent}</b>\n";
+            $result_text .= "❌ Ошибок: <b>{$failed}</b>\n";
+            
+            if (!empty($failed_list)) {
+                $result_text .= "\n❌ Не доставлено:\n" . implode(', ', array_slice($failed_list, 0, 20));
+                if (count($failed_list) > 20) {
+                    $result_text .= "\n...и еще " . (count($failed_list) - 20) . " пользователей";
+                }
+            }
+            
+            sendMessage($chat_id, $result_text, mainKeyboard());
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            
+            // Очищаем данные рассылки
+            unset($GLOBALS['pending_mailing']);
+            return;
+        }
+        
+        if ($data == 'mailing_cancel') {
+            sendMessage($chat_id, "❌ Рассылка отменена.", mainKeyboard());
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            unset($GLOBALS['pending_mailing']);
             return;
         }
         
@@ -428,7 +578,6 @@ function processInviteTransfer($chat_id, $user_id, $code) {
     $stmt = $pdo->prepare("UPDATE invite_transfers SET status = 'completed' WHERE id = ?");
     $stmt->execute([$transfer['id']]);
     
-    // ИСПРАВЛЕНО: убрана конкатенация с точкой
     $desc = 'Получен Invite Transfer от #' . $transfer['sender_id'];
     $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'invite_transfer_receive', ?, NOW())");
     $stmt->execute([$user_id, $transfer['amount'], $desc]);

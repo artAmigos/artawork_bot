@@ -49,6 +49,9 @@ define('INVITE_TRANSFER_DAILY_LIMIT', 5);
 define('INVITE_TRANSFER_EXPIRE', 24);
 define('INVITE_TRANSFER_FEE', 0.02);
 
+// Команда для рассылки (только для админа)
+define('MAILING_COMMAND', '/mail');
+
 // Настройки кейсов
 define('CASES_KEYS_PER_TASK', 1);
 
@@ -327,3 +330,4 @@ function getReferralPercent($user_id) {
     if ($ref_count >= 5) return 20;
     return 15;
 }
+
