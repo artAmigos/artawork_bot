@@ -1,6 +1,17 @@
 <?php
 require_once 'config.php';
 
+// Проверка соединения с БД (используем функцию из config.php)
+function isDBConnected() {
+    global $pdo;
+    try {
+        $pdo->query("SELECT 1");
+        return true;
+    } catch (PDOException $e) {
+        return false;
+    }
+}
+
 // Обработка входящих обновлений
 function processUpdate($update) {
     global $pdo;
@@ -340,37 +351,6 @@ function processUpdate($update) {
             $amount = (int)str_replace('invite_amount_', '', $data);
             createInviteTransferWithAmount($chat_id, $user_id, $amount, $callback['id']);
         }
-    }
-}
-
-// ============================================
-// ФУНКЦИЯ ПРОВЕРКИ ПОДКЛЮЧЕНИЯ К БД
-// ============================================
-function isDBConnected() {
-    global $pdo;
-    try {
-        $pdo->query("SELECT 1");
-        return true;
-    } catch (PDOException $e) {
-        return false;
-    }
-}
-
-// ============================================
-// ФУНКЦИЯ ПЕРЕПОДКЛЮЧЕНИЯ К БД
-// ============================================
-function reconnectDB() {
-    global $pdo;
-    try {
-        $pdo = new PDO("mysql:host=".DB_HOST.";dbname=".DB_NAME, DB_USER, DB_PASS);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $pdo->setAttribute(PDO::ATTR_TIMEOUT, 30);
-        $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
-        // Не используем SET SESSION, так как версия MariaDB может не поддерживать
-        return true;
-    } catch(PDOException $e) {
-        error_log("Reconnect error: " . $e->getMessage());
-        return false;
     }
 }
 
