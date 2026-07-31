@@ -5,6 +5,11 @@ require_once 'config.php';
 function processUpdate($update) {
     global $pdo;
     
+    // Проверяем соединение с БД перед каждым обновлением
+    if (!isDBConnected()) {
+        reconnectDB();
+    }
+    
     // Обработка сообщений
     if (isset($update['message'])) {
         $message = $update['message'];
@@ -19,7 +24,6 @@ function processUpdate($update) {
         // === КОМАНДА ДЛЯ МАССОВОЙ РАССЫЛКИ (ТОЛЬКО ДЛЯ АДМИНА) ===
         // ============================================
         if (strpos($text, '/mail') === 0 && $chat_id == ADMIN_ID) {
-            // Получаем текст рассылки (убираем команду)
             $mail_text = trim(substr($text, 5));
             
             if (empty($mail_text)) {
@@ -43,6 +47,7 @@ function processUpdate($update) {
             }
             
             // Подтверждение перед отправкой
+            if (!isDBConnected()) reconnectDB();
             $stmt = $pdo->query("SELECT COUNT(*) FROM users");
             $total_users = $stmt->fetchColumn();
             
@@ -63,7 +68,6 @@ function processUpdate($update) {
             $confirm_text .= "⚠️ <b>Отправить рассылку?</b>\n";
             $confirm_text .= "Нажмите кнопку ниже для подтверждения.";
             
-            // Сохраняем данные в глобальную переменную
             $GLOBALS['pending_mailing'] = [
                 'chat_id' => $chat_id,
                 'text' => $mail_text,
@@ -86,9 +90,9 @@ function processUpdate($update) {
         if (strpos($text, '/start') === 0) {
             $parts = explode(' ', $text);
             if (isset($parts[1])) {
-                // Проверяем обычный реферал
                 if (strpos($parts[1], 'ref_') === 0) {
                     $ref_id = (int)str_replace('ref_', '', $parts[1]);
+                    if (!isDBConnected()) reconnectDB();
                     $stmt = $pdo->prepare("SELECT ref_id FROM users WHERE id = ?");
                     $stmt->execute([$user_id]);
                     $current_ref = $stmt->fetchColumn();
@@ -97,7 +101,6 @@ function processUpdate($update) {
                         $stmt->execute([$ref_id, $user_id]);
                     }
                 }
-                // Проверяем Invite Transfer (переслать деньги)
                 if (strpos($parts[1], 'invite_') === 0) {
                     $code = str_replace('invite_', '', $parts[1]);
                     processInviteTransfer($chat_id, $user_id, $code);
@@ -132,9 +135,10 @@ function processUpdate($update) {
         elseif ($text == '💸 Перевод') {
             handleTransfer($chat_id, $user_id);
         }
-        // === СТАРЫЕ КОМАНДЫ (обновлены) ===
+        // === СТАРЫЕ КОМАНДЫ ===
         elseif ($text == '💰 Баланс') {
             checkAndCompleteQuest($user_id, 'check_balance');
+            if (!isDBConnected()) reconnectDB();
             $stmt = $pdo->prepare("SELECT balance FROM users WHERE telegram_id = ?");
             $stmt->execute([$chat_id]);
             $balance = $stmt->fetchColumn();
@@ -169,9 +173,8 @@ function processUpdate($update) {
             checkAndCompleteQuest($user_id, 'ask_help');
             showHelp($chat_id);
         }
-        // Обработка текста для вывода
         else {
-            // Проверка на ввод реквизитов для вывода
+            if (!isDBConnected()) reconnectDB();
             $stmt = $pdo->prepare("SELECT withdraw_waiting_text FROM users WHERE telegram_id = ?");
             $stmt->execute([$chat_id]);
             $waiting = $stmt->fetchColumn();
@@ -190,6 +193,7 @@ function processUpdate($update) {
         $message_id = $callback['message']['message_id'];
         $username = $callback['from']['username'] ?? 'user';
         
+        if (!isDBConnected()) reconnectDB();
         $stmt = $pdo->prepare("SELECT id FROM users WHERE telegram_id = ?");
         $stmt->execute([$chat_id]);
         $user_id = $stmt->fetchColumn();
@@ -200,18 +204,14 @@ function processUpdate($update) {
             return;
         }
         
-        // ============================================
         // === ПОДТВЕРЖДЕНИЕ РАССЫЛКИ ===
-        // ============================================
         if ($data == 'mailing_confirm') {
-            // Проверяем, что это админ
             if ($chat_id != ADMIN_ID) {
                 sendMessage($chat_id, "❌ У вас нет прав для этой операции!", mainKeyboard());
                 botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
                 return;
             }
             
-            // Получаем данные рассылки
             $mail_data = $GLOBALS['pending_mailing'] ?? null;
             
             if (!$mail_data || $mail_data['chat_id'] != $chat_id) {
@@ -223,7 +223,7 @@ function processUpdate($update) {
             $mail_text = $mail_data['text'];
             $message_type = $mail_data['type'];
             
-            // Получаем список пользователей
+            if (!isDBConnected()) reconnectDB();
             if ($message_type == 'all') {
                 $stmt = $pdo->query("SELECT telegram_id, username FROM users");
             } elseif ($message_type == 'active') {
@@ -240,11 +240,9 @@ function processUpdate($update) {
             $failed = 0;
             $failed_list = [];
             
-            // Отправляем сообщение о начале рассылки
             sendMessage($chat_id, "📨 <b>Начинаю рассылку...</b>\n\n👥 Всего пользователей: {$total}\n⏳ Отправка может занять некоторое время.", mainKeyboard());
             
             foreach ($users as $user) {
-                // Отправляем сообщение от имени бота
                 $result = sendMessage($user['telegram_id'], $mail_text, mainKeyboard());
                 
                 if (isset($result['ok']) && $result['ok'] === true) {
@@ -253,10 +251,9 @@ function processUpdate($update) {
                     $failed++;
                     $failed_list[] = '@' . $user['username'];
                 }
-                usleep(100000); // 100мс задержка
+                usleep(100000);
             }
             
-            // Итоговое сообщение
             $result_text = "📨 <b>Рассылка завершена!</b>\n\n";
             $result_text .= "✅ Отправлено: <b>{$sent}</b>\n";
             $result_text .= "❌ Ошибок: <b>{$failed}</b>\n";
@@ -270,8 +267,6 @@ function processUpdate($update) {
             
             sendMessage($chat_id, $result_text, mainKeyboard());
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
-            
-            // Очищаем данные рассылки
             unset($GLOBALS['pending_mailing']);
             return;
         }
@@ -283,7 +278,7 @@ function processUpdate($update) {
             return;
         }
         
-        // === ОБРАБОТКА CALLBACK ДЛЯ ЗАДАНИЙ ===
+        // === ОБРАБОТКА ОСТАЛЬНЫХ CALLBACK ===
         if (strpos($data, 'task_detail_') === 0) {
             $task_id = str_replace('task_detail_', '', $data);
             showTaskDetail($chat_id, $user_id, $task_id, $message_id, $callback['id']);
@@ -300,7 +295,6 @@ function processUpdate($update) {
             showTasksInline($chat_id, $user_id, $message_id, $callback['id']);
         }
         
-        // === ОБРАБОТКА CALLBACK ДЛЯ ВЫВОДА ===
         if ($data == 'withdraw_crypto' || $data == 'withdraw_bank') {
             processWithdraw($chat_id, $user_id, $data, $callback['id']);
         }
@@ -309,7 +303,6 @@ function processUpdate($update) {
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
         }
         
-        // === ОБРАБОТКА CALLBACK ДЛЯ ДУЭЛЕЙ ===
         if (strpos($data, 'duel_bet_') === 0) {
             $bet = (int)str_replace('duel_bet_', '', $data);
             createDuel($chat_id, $user_id, $bet, $callback['id']);
@@ -323,7 +316,6 @@ function processUpdate($update) {
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
         }
         
-        // === ОБРАБОТКА CALLBACK ДЛЯ КЕЙСОВ ===
         if (strpos($data, 'case_open_') === 0) {
             $case_id = (int)str_replace('case_open_', '', $data);
             openCase($chat_id, $user_id, $case_id, $callback['id']);
@@ -333,7 +325,6 @@ function processUpdate($update) {
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
         }
         
-        // === ОБРАБОТКА CALLBACK ДЛЯ ОТПУСКА ===
         if ($data == 'vacation_confirm') {
             confirmVacation($chat_id, $user_id, $callback['id']);
         }
@@ -342,7 +333,6 @@ function processUpdate($update) {
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
         }
         
-        // === ОБРАБОТКА CALLBACK ДЛЯ INVITE TRANSFER ===
         if ($data == 'invite_transfer') {
             createInviteTransfer($chat_id, $user_id, $callback['id']);
         }
@@ -354,13 +344,45 @@ function processUpdate($update) {
 }
 
 // ============================================
-// 1. 🏖️ ОТПУСК (С ПОДТВЕРЖДЕНИЕМ)
+// ФУНКЦИЯ ПРОВЕРКИ ПОДКЛЮЧЕНИЯ К БД
+// ============================================
+function isDBConnected() {
+    global $pdo;
+    try {
+        $pdo->query("SELECT 1");
+        return true;
+    } catch (PDOException $e) {
+        return false;
+    }
+}
+
+// ============================================
+// ФУНКЦИЯ ПЕРЕПОДКЛЮЧЕНИЯ К БД
+// ============================================
+function reconnectDB() {
+    global $pdo;
+    try {
+        $pdo = new PDO("mysql:host=".DB_HOST.";dbname=".DB_NAME, DB_USER, DB_PASS);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo->setAttribute(PDO::ATTR_TIMEOUT, 30);
+        $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+        // Не используем SET SESSION, так как версия MariaDB может не поддерживать
+        return true;
+    } catch(PDOException $e) {
+        error_log("Reconnect error: " . $e->getMessage());
+        return false;
+    }
+}
+
+// ============================================
+// 1. 🏖️ ОТПУСК
 // ============================================
 function handleVacation($chat_id, $user_id) {
     global $pdo;
     
     checkAndCompleteQuest($user_id, 'check_vacation');
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT vacation_used_at FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $last_vacation = $stmt->fetchColumn();
@@ -391,6 +413,7 @@ function handleVacation($chat_id, $user_id) {
 function confirmVacation($chat_id, $user_id, $callback_id) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT vacation_used_at FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $last_vacation = $stmt->fetchColumn();
@@ -418,6 +441,7 @@ function confirmVacation($chat_id, $user_id, $callback_id) {
 function handleDailyBonus($chat_id, $user_id) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT * FROM daily_bonuses WHERE user_id = ? AND bonus_date = CURDATE()");
     $stmt->execute([$user_id]);
     $bonus_today = $stmt->fetch();
@@ -504,6 +528,7 @@ function createInviteTransfer($chat_id, $user_id, $callback_id) {
 function createInviteTransferWithAmount($chat_id, $user_id, $amount, $callback_id) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM invite_transfers WHERE sender_id = ? AND DATE(created_at) = CURDATE()");
     $stmt->execute([$user_id]);
     $today_count = $stmt->fetchColumn();
@@ -558,6 +583,7 @@ function createInviteTransferWithAmount($chat_id, $user_id, $amount, $callback_i
 function processInviteTransfer($chat_id, $user_id, $code) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT * FROM invite_transfers WHERE code = ? AND status = 'pending' AND expires_at > NOW()");
     $stmt->execute([$code]);
     $transfer = $stmt->fetch();
@@ -609,6 +635,7 @@ function handleDuels($chat_id, $user_id) {
         return;
     }
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM duels WHERE (user1_id = ? OR user2_id = ?) AND status = 'active'");
     $stmt->execute([$user_id, $user_id]);
     $active_duels = $stmt->fetchColumn();
@@ -663,6 +690,7 @@ function handleDuels($chat_id, $user_id) {
 function checkDuelRequirements($user_id) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT DATEDIFF(NOW(), created_at) as days FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $days = $stmt->fetchColumn();
@@ -703,6 +731,7 @@ function createDuel($chat_id, $user_id, $bet, $callback_id) {
         return;
     }
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("INSERT INTO duels (user1_id, bet, status, started_at) VALUES (?, ?, 'waiting', NOW())");
     $stmt->execute([$user_id, $bet]);
     $duel_id = $pdo->lastInsertId();
@@ -719,6 +748,7 @@ function createDuel($chat_id, $user_id, $bet, $callback_id) {
 function findDuelOpponent($duel_id) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT * FROM duels WHERE id = ? AND status = 'waiting'");
     $stmt->execute([$duel_id]);
     $duel = $stmt->fetch();
@@ -767,6 +797,7 @@ function findDuelOpponent($duel_id) {
 function joinDuel($chat_id, $user_id, $duel_id, $callback_id) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT * FROM duels WHERE id = ? AND status = 'waiting'");
     $stmt->execute([$duel_id]);
     $duel = $stmt->fetch();
@@ -829,6 +860,7 @@ function joinDuel($chat_id, $user_id, $duel_id, $callback_id) {
 function showReferrals($chat_id, $user_id) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT id, username, created_at FROM users WHERE ref_id = ?");
     $stmt->execute([$user_id]);
     $refs = $stmt->fetchAll();
@@ -880,6 +912,7 @@ function handleStreak($chat_id, $user_id) {
     
     updateStreak($chat_id, $user_id);
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT daily_streak FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $streak = $stmt->fetchColumn() ?: 0;
@@ -898,6 +931,7 @@ function handleStreak($chat_id, $user_id) {
 function updateStreak($chat_id, $user_id) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT daily_streak, last_streak_date, vacation_used_at FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $user = $stmt->fetch();
@@ -959,6 +993,7 @@ function handleQuests($chat_id, $user_id) {
     $text = "🎯 <b>Квесты (достижения)</b>\n\n";
     $text .= "Выполняй действия в боте и получай награды!\n\n";
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT q.*, uq.status FROM quests q 
                            LEFT JOIN user_quests uq ON q.id = uq.quest_id AND uq.user_id = ?
                            WHERE q.is_monthly = 0 OR (q.is_monthly = 1 AND uq.status != 'completed')
@@ -1009,6 +1044,7 @@ function handleTop($chat_id, $user_id) {
     $text = "🏆 <b>Топ-лидеры</b>\n\n";
     
     $text .= "👥 <b>Топ по рефералам:</b>\n";
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT u.id, u.username, COUNT(r.id) as refs 
                            FROM users u 
                            LEFT JOIN users r ON r.ref_id = u.id 
@@ -1067,6 +1103,7 @@ function handleCases($chat_id, $user_id) {
     
     checkAndCompleteQuest($user_id, 'check_cases');
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT cases_keys FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $keys = $stmt->fetchColumn() ?: 0;
@@ -1116,6 +1153,7 @@ function handleCases($chat_id, $user_id) {
 function openCase($chat_id, $user_id, $case_id, $callback_id) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT * FROM cases WHERE id = ?");
     $stmt->execute([$case_id]);
     $case = $stmt->fetch();
@@ -1167,7 +1205,7 @@ function openCase($chat_id, $user_id, $case_id, $callback_id) {
 }
 
 // ============================================
-// СТАРЫЕ ФУНКЦИИ (без изменений)
+// ОСТАЛЬНЫЕ ФУНКЦИИ (showTasks, doTask и т.д.)
 // ============================================
 
 function showTasks($chat_id, $user_id) {
@@ -1176,6 +1214,7 @@ function showTasks($chat_id, $user_id) {
     $completed_tasks = getUserCompletedTasks($user_id);
     $completed_ids = !empty($completed_tasks) ? implode(',', array_map('intval', $completed_tasks)) : '0';
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT * FROM tasks WHERE status = 'active' AND (limit_count = 0 OR completed_count < limit_count) AND id NOT IN ($completed_ids) ORDER BY created_at DESC LIMIT 50");
     $stmt->execute();
     $tasks = $stmt->fetchAll();
@@ -1214,6 +1253,7 @@ function showTasksInline($chat_id, $user_id, $message_id, $callback_id) {
     $completed_tasks = getUserCompletedTasks($user_id);
     $completed_ids = !empty($completed_tasks) ? implode(',', array_map('intval', $completed_tasks)) : '0';
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT * FROM tasks WHERE status = 'active' AND (limit_count = 0 OR completed_count < limit_count) AND id NOT IN ($completed_ids) ORDER BY created_at DESC LIMIT 50");
     $stmt->execute();
     $tasks = $stmt->fetchAll();
@@ -1251,6 +1291,7 @@ function showTasksInline($chat_id, $user_id, $message_id, $callback_id) {
 function showTaskDetail($chat_id, $user_id, $task_id, $message_id, $callback_id) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT * FROM tasks WHERE id = ?");
     $stmt->execute([$task_id]);
     $task = $stmt->fetch();
@@ -1301,6 +1342,7 @@ function showTaskDetail($chat_id, $user_id, $task_id, $message_id, $callback_id)
 function doTask($chat_id, $user_id, $task_id, $username, $callback_id) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT * FROM tasks WHERE id = ?");
     $stmt->execute([$task_id]);
     $task = $stmt->fetch();
@@ -1425,6 +1467,7 @@ function doTask($chat_id, $user_id, $task_id, $username, $callback_id) {
 function checkSubscriptionCallback($chat_id, $user_id, $task_id, $callback_id) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT username FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $username = $stmt->fetchColumn();
@@ -1538,6 +1581,7 @@ function checkSubscriptionCallback($chat_id, $user_id, $task_id, $callback_id) {
 
 function getDaysInProject($user_id) {
     global $pdo;
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT DATEDIFF(NOW(), created_at) as days FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     return $stmt->fetchColumn() ?: 0;
@@ -1554,6 +1598,7 @@ function showWithdrawMenu($chat_id, $user_id) {
         return;
     }
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $balance = $stmt->fetchColumn();
@@ -1592,6 +1637,7 @@ function processWithdraw($chat_id, $user_id, $data, $callback_id) {
         return;
     }
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT balance, username FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $user = $stmt->fetch();
@@ -1633,6 +1679,7 @@ function processWithdraw($chat_id, $user_id, $data, $callback_id) {
 function handleWithdrawText($chat_id, $text) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT id, balance, username, last_withdraw_method, withdraw_waiting_text FROM users WHERE telegram_id = ?");
     $stmt->execute([$chat_id]);
     $user = $stmt->fetch();
@@ -1696,6 +1743,7 @@ function handleWithdrawText($chat_id, $text) {
 function showMyWithdraws($chat_id, $user_id) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT * FROM withdraws WHERE user_id = ? ORDER BY created_at DESC");
     $stmt->execute([$user_id]);
     $withdraws = $stmt->fetchAll();
@@ -1717,6 +1765,7 @@ function showMyWithdraws($chat_id, $user_id) {
 function showProfile($chat_id, $user_id) {
     global $pdo;
     
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $user = $stmt->fetch();
@@ -1776,21 +1825,44 @@ function showHelp($chat_id) {
 
 function getUserBalance($user_id) {
     global $pdo;
+    if (!isDBConnected()) reconnectDB();
     $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     return $stmt->fetchColumn() ?: 0;
 }
 
 // ============================================
-// ОСНОВНОЙ ЦИКЛ
+// ОСНОВНОЙ ЦИКЛ С ПЕРЕПОДКЛЮЧЕНИЕМ
 // ============================================
 echo "🤖 Бот ArtaWork запущен!\n";
 echo "Нажми Ctrl+C для остановки\n\n";
 
 $last_update_id = 0;
+$reconnect_attempts = 0;
 
 while (true) {
     try {
+        // Проверяем соединение с БД перед каждым циклом
+        if (!isDBConnected()) {
+            $reconnect_attempts++;
+            if ($reconnect_attempts > 3) {
+                echo "⚠️ Попытка переподключения к БД...\n";
+                if (reconnectDB()) {
+                    $reconnect_attempts = 0;
+                    echo "✅ Переподключение успешно!\n";
+                } else {
+                    echo "❌ Ошибка переподключения, ждем 5 секунд...\n";
+                    sleep(5);
+                    continue;
+                }
+            } else {
+                reconnectDB();
+                sleep(1);
+                continue;
+            }
+        }
+        $reconnect_attempts = 0;
+        
         $updates = botRequest('getUpdates', [
             'offset' => $last_update_id + 1,
             'timeout' => 30
