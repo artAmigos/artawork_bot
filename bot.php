@@ -1,189 +1,117 @@
-bot.php
 <?php
 require_once 'config.php';
 
-// Обработка входящих обновлений
+// ============================================
+// НОВОЕ ГЛАВНОЕ МЕНЮ (4 КНОПКИ)
+// ============================================
+function mainKeyboard() {
+    return [
+        'keyboard' => [
+            [['text' => '📋 Задания'], ['text' => '🎮 Игры']],
+            [['text' => '👤 Профиль'], ['text' => '❓ Помощь']]
+        ],
+        'resize_keyboard' => true,
+        'one_time_keyboard' => false
+    ];
+}
+
+// ============================================
+// ПОДМЕНЮ "ИГРЫ"
+// ============================================
+function gamesKeyboard() {
+    return [
+        'inline_keyboard' => [
+            [['text' => '🏖️ Отпуск', 'callback_data' => 'game_vacation']],
+            [['text' => '⚔️ Дуэли', 'callback_data' => 'game_duels']],
+            [['text' => '🎲 Кейсы', 'callback_data' => 'game_cases']],
+            [['text' => '🏆 Топ', 'callback_data' => 'game_top']],
+            [['text' => '🔥 Стрик', 'callback_data' => 'game_streak']],
+            [['text' => '🎯 Квесты', 'callback_data' => 'game_quests']],
+            [['text' => '🔙 Назад', 'callback_data' => 'game_back']]
+        ]
+    ];
+}
+
+// ============================================
+// ПОДМЕНЮ "ПРОФИЛЬ"
+// ============================================
+function profileKeyboard() {
+    return [
+        'inline_keyboard' => [
+            [['text' => '💰 Баланс', 'callback_data' => 'profile_balance']],
+            [['text' => '💳 Вывод', 'callback_data' => 'profile_withdraw']],
+            [['text' => '👥 Рефералы', 'callback_data' => 'profile_refs']],
+            [['text' => '📊 Мои выводы', 'callback_data' => 'profile_withdraws']],
+            [['text' => '📨 Перевод', 'callback_data' => 'profile_transfer']],
+            [['text' => '🔙 Назад', 'callback_data' => 'profile_back']]
+        ]
+    ];
+}
+
+// ============================================
+// ОБРАБОТКА ВХОДЯЩИХ ОБНОВЛЕНИЙ
+// ============================================
 function processUpdate($update) {
     global $pdo;
     
-    // Обработка сообщений
+    // ============================================
+    // ОБРАБОТКА СООБЩЕНИЙ
+    // ============================================
     if (isset($update['message'])) {
         $message = $update['message'];
         $chat_id = $message['chat']['id'];
         $text = $message['text'] ?? '';
         $username = $message['from']['username'] ?? 'user';
-        
-        // Регистрируем пользователя
         $user_id = registerUser($chat_id, $username);
         
-        // ============================================
-        // === КОМАНДА ДЛЯ МАССОВОЙ РАССЫЛКИ (ТОЛЬКО ДЛЯ АДМИНА) ===
-        // ============================================
+        // === МАССОВАЯ РАССЫЛКА ДЛЯ АДМИНА ===
         if (strpos($text, '/mail') === 0 && $chat_id == ADMIN_ID) {
-            // Получаем текст рассылки (убираем команду)
-            $mail_text = trim(substr($text, 5));
-            
-            if (empty($mail_text)) {
-                sendMessage($chat_id, "❌ <b>Укажите текст для рассылки!</b>\n\nПример:\n<code>/mail Привет всем! 🚀</code>", mainKeyboard());
-                return;
-            }
-            
-            // Проверяем, есть ли параметр типа получателей
-            $message_type = 'all';
-            $lines = explode("\n", $mail_text);
-            $first_line = $lines[0] ?? '';
-            
-            if (strpos($first_line, '[active]') !== false) {
-                $message_type = 'active';
-                $mail_text = str_replace('[active]', '', $mail_text);
-                $mail_text = trim($mail_text);
-            } elseif (strpos($first_line, '[new]') !== false) {
-                $message_type = 'new';
-                $mail_text = str_replace('[new]', '', $mail_text);
-                $mail_text = trim($mail_text);
-            }
-            
-            // Подтверждение перед отправкой
-            $stmt = $pdo->query("SELECT COUNT(*) FROM users");
-            $total_users = $stmt->fetchColumn();
-            
-            if ($total_users == 0) {
-                sendMessage($chat_id, "❌ Нет пользователей для рассылки!", mainKeyboard());
-                return;
-            }
-            
-            $type_label = $message_type == 'all' ? 'ВСЕМ' : ($message_type == 'active' ? 'АКТИВНЫМ (≥5 заданий)' : 'НОВЫМ (≥1 задание)');
-            
-            $confirm_text = "📨 <b>Массовая рассылка</b>\n\n";
-            $confirm_text .= "👥 Получатели: <b>{$type_label}</b>\n";
-            $confirm_text .= "📊 Всего: <b>{$total_users}</b> пользователей\n\n";
-            $confirm_text .= "📝 <b>Текст сообщения:</b>\n";
-            $confirm_text .= "━━━━━━━━━━━━━━━━━━━\n";
-            $confirm_text .= $mail_text . "\n";
-            $confirm_text .= "━━━━━━━━━━━━━━━━━━━\n\n";
-            $confirm_text .= "⚠️ <b>Отправить рассылку?</b>\n";
-            $confirm_text .= "Нажмите кнопку ниже для подтверждения.";
-            
-            // Сохраняем данные в глобальную переменную
-            $GLOBALS['pending_mailing'] = [
-                'chat_id' => $chat_id,
-                'text' => $mail_text,
-                'type' => $message_type,
-                'total' => $total_users
-            ];
-            
-            $inlineKeyboard = [
-                'inline_keyboard' => [
-                    [['text' => '✅ Да, отправить всем', 'callback_data' => 'mailing_confirm']],
-                    [['text' => '❌ Отмена', 'callback_data' => 'mailing_cancel']]
-                ]
-            ];
-            
-            sendMessage($chat_id, $confirm_text, $inlineKeyboard);
+            handleAdminMail($chat_id, $text);
             return;
         }
         
-        // Проверяем реферальную ссылку при старте
+        // === /START ===
         if (strpos($text, '/start') === 0) {
-            $parts = explode(' ', $text);
-            if (isset($parts[1])) {
-                // Проверяем обычный реферал
-                if (strpos($parts[1], 'ref_') === 0) {
-                    $ref_id = (int)str_replace('ref_', '', $parts[1]);
-                    $stmt = $pdo->prepare("SELECT ref_id FROM users WHERE id = ?");
-                    $stmt->execute([$user_id]);
-                    $current_ref = $stmt->fetchColumn();
-                    if ($current_ref == 0 && $ref_id > 0 && $ref_id != $user_id) {
-                        $stmt = $pdo->prepare("UPDATE users SET ref_id = ? WHERE id = ?");
-                        $stmt->execute([$ref_id, $user_id]);
-                    }
-                }
-                // Проверяем Invite Transfer (переслать деньги)
-                if (strpos($parts[1], 'invite_') === 0) {
-                    $code = str_replace('invite_', '', $parts[1]);
-                    processInviteTransfer($chat_id, $user_id, $code);
-                }
-            }
-            
-            $welcome = "👋 Добро пожаловать в ArtaWork!\n\n";
-            $welcome .= "Здесь ты можешь зарабатывать, выполняя простые задания.\n\n";
-            $welcome .= "📌 Нажми на кнопку «📋 Задания», чтобы начать зарабатывать!\n";
-            $welcome .= "💰 Минимальная сумма вывода: " . formatRub(MIN_WITHDRAW_RUB) . " (≈" . rubToEur(MIN_WITHDRAW_RUB) . " €)";
-            sendMessage($chat_id, $welcome, mainKeyboard());
+            handleStart($chat_id, $user_id, $text);
+            return;
         }
-        // === НОВЫЕ КОМАНДЫ ===
-        elseif ($text == '🏖️ Отпуск') {
-            handleVacation($chat_id, $user_id);
-        }
-        elseif ($text == '🏆 Дуэли') {
-            handleDuels($chat_id, $user_id);
-        }
-        elseif ($text == '🔥 Стрик') {
-            handleStreak($chat_id, $user_id);
-        }
-        elseif ($text == '🎯 Квесты') {
-            handleQuests($chat_id, $user_id);
-        }
-        elseif ($text == '🏆 Топ') {
-            handleTop($chat_id, $user_id);
-        }
-        elseif ($text == '🎲 Кейсы') {
-            handleCases($chat_id, $user_id);
-        }
-        elseif ($text == '💸 Перевод') {
-            handleTransfer($chat_id, $user_id);
-        }
-        // === СТАРЫЕ КОМАНДЫ (обновлены) ===
-        elseif ($text == '💰 Баланс') {
-            checkAndCompleteQuest($user_id, 'check_balance');
-            $stmt = $pdo->prepare("SELECT balance FROM users WHERE telegram_id = ?");
-            $stmt->execute([$chat_id]);
-            $balance = $stmt->fetchColumn();
-            $text = "💰 <b>Твой баланс</b>\n\n💵 <b>" . formatRub($balance) . "</b>\n💶 ≈ " . rubToEur($balance) . " €\n\n📊 Минимальный вывод: " . formatRub(MIN_WITHDRAW_RUB) . " (≈" . rubToEur(MIN_WITHDRAW_RUB) . " €)";
-            sendMessage($chat_id, $text, mainKeyboard());
-        }
-        elseif ($text == '📋 Задания') {
+        
+        // === ГЛАВНОЕ МЕНЮ ===
+        if ($text == '📋 Задания') {
             checkAndCompleteQuest($user_id, 'first_step');
             showTasks($chat_id, $user_id);
+            return;
         }
-        elseif ($text == '🎁 Бонус дня') {
-            checkAndCompleteQuest($user_id, 'take_bonus');
-            handleDailyBonus($chat_id, $user_id);
+        
+        if ($text == '🎮 Игры') {
+            showGamesMenu($chat_id, $user_id);
+            return;
         }
-        elseif ($text == '👥 Рефералы') {
-            checkAndCompleteQuest($user_id, 'check_refs');
-            showReferrals($chat_id, $user_id);
+        
+        if ($text == '👤 Профиль') {
+            showProfileMenu($chat_id, $user_id);
+            return;
         }
-        elseif ($text == '💳 Вывод') {
-            checkAndCompleteQuest($user_id, 'check_withdraw');
-            showWithdrawMenu($chat_id, $user_id);
-        }
-        elseif ($text == '📊 Мои выводы') {
-            checkAndCompleteQuest($user_id, 'check_my_withdraws');
-            showMyWithdraws($chat_id, $user_id);
-        }
-        elseif ($text == '👤 Профиль') {
-            checkAndCompleteQuest($user_id, 'check_profile');
-            showProfile($chat_id, $user_id);
-        }
-        elseif ($text == '❓ Помощь') {
+        
+        if ($text == '❓ Помощь') {
             checkAndCompleteQuest($user_id, 'ask_help');
             showHelp($chat_id);
+            return;
         }
-        // Обработка текста для вывода
-        else {
-            // Проверка на ввод реквизитов для вывода
-            $stmt = $pdo->prepare("SELECT withdraw_waiting_text FROM users WHERE telegram_id = ?");
-            $stmt->execute([$chat_id]);
-            $waiting = $stmt->fetchColumn();
-            if ($waiting == 'yes') {
-                handleWithdrawText($chat_id, $text);
-                return;
-            }
+        
+        // === ОБРАБОТКА ВВОДА РЕКВИЗИТОВ ДЛЯ ВЫВОДА ===
+        $stmt = $pdo->prepare("SELECT withdraw_waiting_text FROM users WHERE id = ?");
+        $stmt->execute([$user_id]);
+        $waiting = $stmt->fetchColumn();
+        if ($waiting == 'yes') {
+            handleWithdrawText($chat_id, $user_id, $text);
+            return;
         }
     }
     
-    // Обработка callback запросов
+    // ============================================
+    // ОБРАБОТКА CALLBACK
+    // ============================================
     if (isset($update['callback_query'])) {
         $callback = $update['callback_query'];
         $chat_id = $callback['from']['id'];
@@ -201,82 +129,83 @@ function processUpdate($update) {
             return;
         }
         
-        // ============================================
-        // === ПОДТВЕРЖДЕНИЕ РАССЫЛКИ ===
-        // ============================================
-        if ($data == 'mailing_confirm') {
-            // Проверяем, что это админ
-            if ($chat_id != ADMIN_ID) {
-                sendMessage($chat_id, "❌ У вас нет прав для этой операции!", mainKeyboard());
-                botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
-                return;
-            }
-            
-            // Получаем данные рассылки
-            $mail_data = $GLOBALS['pending_mailing'] ?? null;
-            
-            if (!$mail_data || $mail_data['chat_id'] != $chat_id) {
-                sendMessage($chat_id, "❌ Данные рассылки устарели. Отправьте команду заново.", mainKeyboard());
-                botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
-                return;
-            }
-            
-            $mail_text = $mail_data['text'];
-            $message_type = $mail_data['type'];
-            
-            // Получаем список пользователей
-            if ($message_type == 'all') {
-                $stmt = $pdo->query("SELECT telegram_id, username FROM users");
-            } elseif ($message_type == 'active') {
-                $stmt = $pdo->prepare("SELECT telegram_id, username FROM users WHERE id IN (SELECT user_id FROM user_tasks WHERE status = 'completed' GROUP BY user_id HAVING COUNT(*) >= 5)");
-                $stmt->execute();
-            } else {
-                $stmt = $pdo->prepare("SELECT telegram_id, username FROM users WHERE id IN (SELECT user_id FROM user_tasks WHERE status = 'completed' GROUP BY user_id HAVING COUNT(*) >= 1)");
-                $stmt->execute();
-            }
-            
-            $users = $stmt->fetchAll();
-            $total = count($users);
-            $sent = 0;
-            $failed = 0;
-            $failed_list = [];
-            
-            // Отправляем сообщение о начале рассылки
-            sendMessage($chat_id, "📨 <b>Начинаю рассылку...</b>\n\n👥 Всего пользователей: {$total}\n⏳ Отправка может занять некоторое время.", mainKeyboard());
-            
-            foreach ($users as $user) {
-                // Отправляем сообщение от имени бота
-                $result = sendMessage($user['telegram_id'], $mail_text, mainKeyboard());
-                
-                if (isset($result['ok']) && $result['ok'] === true) {
-                    $sent++;
-                } else {
-                    $failed++;
-                    $failed_list[] = '@' . $user['username'];
-                }
-                usleep(100000); // 100мс задержка
-            }
-            
-            // Итоговое сообщение
-            $result_text = "📨 <b>Рассылка завершена!</b>\n\n";
-            $result_text .= "✅ Отправлено: <b>{$sent}</b>\n";
-            $result_text .= "❌ Ошибок: <b>{$failed}</b>\n";
-            
-            if (!empty($failed_list)) {
-                $result_text .= "\n❌ Не доставлено:\n" . implode(', ', array_slice($failed_list, 0, 20));
-                if (count($failed_list) > 20) {
-                    $result_text .= "\n...и еще " . (count($failed_list) - 20) . " пользователей";
-                }
-            }
-            
-            sendMessage($chat_id, $result_text, mainKeyboard());
+        // === ПОДМЕНЮ "ИГРЫ" ===
+        if ($data == 'game_vacation') {
+            handleVacation($chat_id, $user_id);
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
-            
-            // Очищаем данные рассылки
-            unset($GLOBALS['pending_mailing']);
+            return;
+        }
+        if ($data == 'game_duels') {
+            handleDuels($chat_id, $user_id);
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
+        }
+        if ($data == 'game_cases') {
+            handleCases($chat_id, $user_id);
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
+        }
+        if ($data == 'game_top') {
+            handleTop($chat_id, $user_id);
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
+        }
+        if ($data == 'game_streak') {
+            handleStreak($chat_id, $user_id);
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
+        }
+        if ($data == 'game_quests') {
+            handleQuests($chat_id, $user_id);
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
+        }
+        if ($data == 'game_back') {
+            sendMessage($chat_id, "🏠 <b>Главное меню</b>", mainKeyboard());
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
             return;
         }
         
+        // === ПОДМЕНЮ "ПРОФИЛЬ" ===
+        if ($data == 'profile_balance') {
+            showBalance($chat_id, $user_id);
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
+        }
+        if ($data == 'profile_withdraw') {
+            checkAndCompleteQuest($user_id, 'check_withdraw');
+            showWithdrawMenu($chat_id, $user_id);
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
+        }
+        if ($data == 'profile_refs') {
+            checkAndCompleteQuest($user_id, 'check_refs');
+            showReferrals($chat_id, $user_id);
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
+        }
+        if ($data == 'profile_withdraws') {
+            checkAndCompleteQuest($user_id, 'check_my_withdraws');
+            showMyWithdraws($chat_id, $user_id);
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
+        }
+        if ($data == 'profile_transfer') {
+            handleTransfer($chat_id, $user_id);
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
+        }
+        if ($data == 'profile_back') {
+            sendMessage($chat_id, "🏠 <b>Главное меню</b>", mainKeyboard());
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
+        }
+        
+        // === МАССОВАЯ РАССЫЛКА ===
+        if ($data == 'mailing_confirm') {
+            handleMailConfirm($chat_id, $callback['id']);
+            return;
+        }
         if ($data == 'mailing_cancel') {
             sendMessage($chat_id, "❌ Рассылка отменена.", mainKeyboard());
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
@@ -284,79 +213,421 @@ function processUpdate($update) {
             return;
         }
         
-        // === ОБРАБОТКА CALLBACK ДЛЯ ЗАДАНИЙ ===
+        // === ЗАДАНИЯ ===
         if (strpos($data, 'task_detail_') === 0) {
             $task_id = str_replace('task_detail_', '', $data);
             showTaskDetail($chat_id, $user_id, $task_id, $message_id, $callback['id']);
+            return;
         }
         if (strpos($data, 'task_do_') === 0) {
             $task_id = str_replace('task_do_', '', $data);
             doTask($chat_id, $user_id, $task_id, $username, $callback['id']);
+            return;
         }
         if (strpos($data, 'check_sub_') === 0) {
             $task_id = str_replace('check_sub_', '', $data);
             checkSubscriptionCallback($chat_id, $user_id, $task_id, $callback['id']);
+            return;
         }
         if ($data == 'refresh_tasks') {
             showTasksInline($chat_id, $user_id, $message_id, $callback['id']);
+            return;
         }
         
-        // === ОБРАБОТКА CALLBACK ДЛЯ ВЫВОДА ===
+        // === ВЫВОД ===
         if ($data == 'withdraw_crypto' || $data == 'withdraw_bank') {
             processWithdraw($chat_id, $user_id, $data, $callback['id']);
+            return;
         }
         if ($data == 'withdraw_cancel') {
             sendMessage($chat_id, "❌ Вывод отменён.", mainKeyboard());
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
         }
         
-        // === ОБРАБОТКА CALLBACK ДЛЯ ДУЭЛЕЙ ===
+        // === ДУЭЛИ ===
         if (strpos($data, 'duel_bet_') === 0) {
             $bet = (int)str_replace('duel_bet_', '', $data);
             createDuel($chat_id, $user_id, $bet, $callback['id']);
+            return;
         }
         if (strpos($data, 'duel_join_') === 0) {
             $duel_id = (int)str_replace('duel_join_', '', $data);
             joinDuel($chat_id, $user_id, $duel_id, $callback['id']);
+            return;
         }
         if ($data == 'duel_refresh') {
             handleDuels($chat_id, $user_id);
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
         }
         
-        // === ОБРАБОТКА CALLBACK ДЛЯ КЕЙСОВ ===
+        // === КЕЙСЫ ===
         if (strpos($data, 'case_open_') === 0) {
             $case_id = (int)str_replace('case_open_', '', $data);
             openCase($chat_id, $user_id, $case_id, $callback['id']);
+            return;
         }
         if ($data == 'cases_refresh') {
             handleCases($chat_id, $user_id);
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
         }
         
-        // === ОБРАБОТКА CALLBACK ДЛЯ ОТПУСКА ===
+        // === ОТПУСК ===
         if ($data == 'vacation_confirm') {
             confirmVacation($chat_id, $user_id, $callback['id']);
+            return;
         }
         if ($data == 'vacation_cancel') {
             sendMessage($chat_id, "❌ Отпуск отменён.", mainKeyboard());
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
         }
         
-        // === ОБРАБОТКА CALLBACK ДЛЯ INVITE TRANSFER ===
+        // === INVITE TRANSFER ===
         if ($data == 'invite_transfer') {
             createInviteTransfer($chat_id, $user_id, $callback['id']);
+            return;
         }
         if (strpos($data, 'invite_amount_') === 0) {
             $amount = (int)str_replace('invite_amount_', '', $data);
             createInviteTransferWithAmount($chat_id, $user_id, $amount, $callback['id']);
+            return;
         }
     }
 }
 
 // ============================================
-// 1. 🏖️ ОТПУСК (С ПОДТВЕРЖДЕНИЕМ)
+// 1. ОБРАБОТКА /START
 // ============================================
+function handleStart($chat_id, $user_id, $text) {
+    global $pdo;
+    
+    $parts = explode(' ', $text);
+    if (isset($parts[1])) {
+        if (strpos($parts[1], 'ref_') === 0) {
+            $ref_id = (int)str_replace('ref_', '', $parts[1]);
+            $stmt = $pdo->prepare("SELECT ref_id FROM users WHERE id = ?");
+            $stmt->execute([$user_id]);
+            $current_ref = $stmt->fetchColumn();
+            if ($current_ref == 0 && $ref_id > 0 && $ref_id != $user_id) {
+                $stmt = $pdo->prepare("UPDATE users SET ref_id = ? WHERE id = ?");
+                $stmt->execute([$ref_id, $user_id]);
+                // Бонус за регистрацию по реферальной ссылке
+                $bonus = 50;
+                $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
+                $stmt->execute([$bonus, $user_id]);
+                $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
+                $stmt->execute([$bonus, $ref_id]);
+                sendMessage($ref_id, "🎉 Новый реферал! Ты получил " . formatRub($bonus) . "!");
+            }
+        }
+        if (strpos($parts[1], 'invite_') === 0) {
+            $code = str_replace('invite_', '', $parts[1]);
+            processInviteTransfer($chat_id, $user_id, $code);
+            return;
+        }
+    }
+    
+    // Показываем главное меню со статистикой
+    showMainStats($chat_id, $user_id);
+}
+
+// ============================================
+// 2. ГЛАВНАЯ СТАТИСТИКА
+// ============================================
+function showMainStats($chat_id, $user_id) {
+    global $pdo;
+    
+    $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+    $target = 3000;
+    $remaining = $target - $total_users;
+    $progress = min(($total_users / $target) * 100, 100);
+    
+    // Проверяем рубежи
+    checkMilestones();
+    
+    $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
+    $stmt->execute([$user_id]);
+    $balance = $stmt->fetchColumn();
+    
+    $text = "🏠 <b>ArtaWork</b>\n\n";
+    $text .= "💰 Твой баланс: <b>" . formatRub($balance) . "</b>\n";
+    $text .= "💶 ≈ " . rubToEur($balance) . " €\n\n";
+    
+    $text .= "🔥 <b>До открытия выплат:</b>\n";
+    $text .= buildProgressBar($progress, 15) . " " . round($progress) . "%\n";
+    $text .= "👥 " . number_format($total_users, 0, '.', ' ') . " / " . number_format($target, 0, '.', ' ') . "\n";
+    $text .= "⏳ Осталось: " . number_format($remaining, 0, '.', ' ') . " работников\n\n";
+    
+    if ($total_users >= $target) {
+        $text .= "🎉 <b>ВЫВОДЫ ОТКРЫТЫ!</b>\n\n";
+    } else {
+        $text .= "💡 <b>Что нужно сделать?</b>\n";
+        $text .= "1. 📋 Выполняй задания — зарабатывай!\n";
+        $text .= "2. 👥 Приглашай друзей — получай бонусы!\n";
+        $text .= "3. 🎁 Забирай ежедневный бонус!\n";
+        $text .= "4. 🚀 Следи за ростом платформы!\n\n";
+    }
+    
+    $text .= "📈 <a href='https://artawork.ru'>👉 artawork.ru</a>";
+    
+    sendMessage($chat_id, $text, mainKeyboard());
+}
+
+// ============================================
+// 3. ПРОГРЕСС-БАР
+// ============================================
+function buildProgressBar($percent, $length = 20) {
+    $filled = round(($percent / 100) * $length);
+    $empty = $length - $filled;
+    $bar = '▰' . str_repeat('▓', $filled) . str_repeat('░', $empty) . '▱';
+    return $bar;
+}
+
+// ============================================
+// 4. ПРОВЕРКА РУБЕЖЕЙ
+// ============================================
+function checkMilestones() {
+    global $pdo;
+    
+    $total = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+    $milestones = [100, 500, 1000, 1500, 2000, 2500, 2800, 2900, 2950, 2990, 2995, 2999];
+    
+    foreach ($milestones as $ms) {
+        if ($total >= $ms && !isMilestoneNotified($ms)) {
+            sendMilestoneNotification($ms);
+            markMilestoneNotified($ms);
+        }
+    }
+}
+
+function isMilestoneNotified($milestone) {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM milestones WHERE milestone = ?");
+    $stmt->execute([$milestone]);
+    return $stmt->fetchColumn() > 0;
+}
+
+function markMilestoneNotified($milestone) {
+    global $pdo;
+    $stmt = $pdo->prepare("INSERT INTO milestones (milestone, notified_at) VALUES (?, NOW())");
+    $stmt->execute([$milestone]);
+}
+
+function sendMilestoneNotification($count) {
+    global $pdo;
+    
+    $remaining = 3000 - $count;
+    $text = "🎉 <b>НОВЫЙ РУБЕЖ!</b>\n\n";
+    $text .= "👥 Нас уже <b>" . number_format($count, 0, '.', ' ') . "</b> человек!\n";
+    
+    if ($remaining > 0) {
+        $text .= "⏳ Осталось <b>" . number_format($remaining, 0, '.', ' ') . "</b> до открытия выводов!\n\n";
+        $text .= "🔥 Каждый новый пользователь приближает выплаты!\n";
+        $text .= "Приглашай друзей и получай бонусы!";
+    } else {
+        $text .= "🎊 <b>ВЫВОДЫ ОТКРЫТЫ!</b>\n";
+        $text .= "Все накопления доступны к выводу!\n";
+        $text .= "Спасибо, что был с нами! ❤️";
+    }
+    
+    $stmt = $pdo->query("SELECT telegram_id FROM users");
+    $users = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    
+    foreach ($users as $telegram_id) {
+        sendMessage($telegram_id, $text, mainKeyboard());
+        usleep(50000);
+    }
+}
+
+// ============================================
+// 5. ПОКАЗАТЬ МЕНЮ ИГР
+// ============================================
+function showGamesMenu($chat_id, $user_id) {
+    $text = "🎮 <b>Игровой раздел</b>\n\n";
+    $text .= "Выбери игру или развлечение:\n";
+    $text .= "💰 Все игры виртуальные — ты не проигрываешь реальные деньги!\n\n";
+    $text .= "🔥 <b>Активные ивенты:</b>\n";
+    $text .= "• Сегодня — двойные бонусы за задания!\n";
+    $text .= "• До конца турнира осталось 2 часа!";
+    
+    sendMessage($chat_id, $text, gamesKeyboard());
+}
+
+// ============================================
+// 6. ПОКАЗАТЬ МЕНЮ ПРОФИЛЬ
+// ============================================
+function showProfileMenu($chat_id, $user_id) {
+    global $pdo;
+    
+    $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
+    $stmt->execute([$user_id]);
+    $balance = $stmt->fetchColumn();
+    
+    $text = "👤 <b>Твой профиль</b>\n\n";
+    $text .= "💰 Баланс: <b>" . formatRub($balance) . "</b>\n";
+    $text .= "💶 ≈ " . rubToEur($balance) . " €\n\n";
+    $text .= "Выбери действие:";
+    
+    sendMessage($chat_id, $text, profileKeyboard());
+}
+
+// ============================================
+// 7. ПОКАЗАТЬ БАЛАНС
+// ============================================
+function showBalance($chat_id, $user_id) {
+    global $pdo;
+    
+    checkAndCompleteQuest($user_id, 'check_balance');
+    
+    $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
+    $stmt->execute([$user_id]);
+    $balance = $stmt->fetchColumn();
+    
+    $text = "💰 <b>Твой баланс</b>\n\n";
+    $text .= "💵 <b>" . formatRub($balance) . "</b>\n";
+    $text .= "💶 ≈ " . rubToEur($balance) . " €\n\n";
+    $text .= "📊 Минимальный вывод: " . formatRub(MIN_WITHDRAW_RUB) . " (≈" . rubToEur(MIN_WITHDRAW_RUB) . " €)";
+    
+    sendMessage($chat_id, $text, mainKeyboard());
+}
+
+// ============================================
+// 8. ОБРАБОТКА РАССЫЛКИ (АДМИН)
+// ============================================
+function handleAdminMail($chat_id, $text) {
+    global $pdo;
+    
+    $mail_text = trim(substr($text, 5));
+    
+    if (empty($mail_text)) {
+        sendMessage($chat_id, "❌ <b>Укажите текст для рассылки!</b>\n\nПример:\n<code>/mail Привет всем! 🚀</code>", mainKeyboard());
+        return;
+    }
+    
+    $message_type = 'all';
+    $lines = explode("\n", $mail_text);
+    $first_line = $lines[0] ?? '';
+    
+    if (strpos($first_line, '[active]') !== false) {
+        $message_type = 'active';
+        $mail_text = str_replace('[active]', '', $mail_text);
+        $mail_text = trim($mail_text);
+    } elseif (strpos($first_line, '[new]') !== false) {
+        $message_type = 'new';
+        $mail_text = str_replace('[new]', '', $mail_text);
+        $mail_text = trim($mail_text);
+    }
+    
+    $stmt = $pdo->query("SELECT COUNT(*) FROM users");
+    $total_users = $stmt->fetchColumn();
+    
+    if ($total_users == 0) {
+        sendMessage($chat_id, "❌ Нет пользователей для рассылки!", mainKeyboard());
+        return;
+    }
+    
+    $type_label = $message_type == 'all' ? 'ВСЕМ' : ($message_type == 'active' ? 'АКТИВНЫМ (≥5 заданий)' : 'НОВЫМ (≥1 задание)');
+    
+    $confirm_text = "📨 <b>Массовая рассылка</b>\n\n";
+    $confirm_text .= "👥 Получатели: <b>{$type_label}</b>\n";
+    $confirm_text .= "📊 Всего: <b>{$total_users}</b> пользователей\n\n";
+    $confirm_text .= "📝 <b>Текст сообщения:</b>\n";
+    $confirm_text .= "━━━━━━━━━━━━━━━━━━━\n";
+    $confirm_text .= $mail_text . "\n";
+    $confirm_text .= "━━━━━━━━━━━━━━━━━━━\n\n";
+    $confirm_text .= "⚠️ <b>Отправить рассылку?</b>\n";
+    $confirm_text .= "Нажмите кнопку ниже для подтверждения.";
+    
+    $GLOBALS['pending_mailing'] = [
+        'chat_id' => $chat_id,
+        'text' => $mail_text,
+        'type' => $message_type,
+        'total' => $total_users
+    ];
+    
+    $inlineKeyboard = [
+        'inline_keyboard' => [
+            [['text' => '✅ Да, отправить всем', 'callback_data' => 'mailing_confirm']],
+            [['text' => '❌ Отмена', 'callback_data' => 'mailing_cancel']]
+        ]
+    ];
+    
+    sendMessage($chat_id, $confirm_text, $inlineKeyboard);
+}
+
+function handleMailConfirm($chat_id, $callback_id) {
+    global $pdo;
+    
+    if ($chat_id != ADMIN_ID) {
+        sendMessage($chat_id, "❌ У вас нет прав для этой операции!", mainKeyboard());
+        botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
+        return;
+    }
+    
+    $mail_data = $GLOBALS['pending_mailing'] ?? null;
+    
+    if (!$mail_data || $mail_data['chat_id'] != $chat_id) {
+        sendMessage($chat_id, "❌ Данные рассылки устарели. Отправьте команду заново.", mainKeyboard());
+        botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
+        return;
+    }
+    
+    $mail_text = $mail_data['text'];
+    $message_type = $mail_data['type'];
+    
+    if ($message_type == 'all') {
+        $stmt = $pdo->query("SELECT telegram_id, username FROM users");
+    } elseif ($message_type == 'active') {
+        $stmt = $pdo->prepare("SELECT telegram_id, username FROM users WHERE id IN (SELECT user_id FROM user_tasks WHERE status = 'completed' GROUP BY user_id HAVING COUNT(*) >= 5)");
+        $stmt->execute();
+    } else {
+        $stmt = $pdo->prepare("SELECT telegram_id, username FROM users WHERE id IN (SELECT user_id FROM user_tasks WHERE status = 'completed' GROUP BY user_id HAVING COUNT(*) >= 1)");
+        $stmt->execute();
+    }
+    
+    $users = $stmt->fetchAll();
+    $total = count($users);
+    $sent = 0;
+    $failed = 0;
+    $failed_list = [];
+    
+    sendMessage($chat_id, "📨 <b>Начинаю рассылку...</b>\n\n👥 Всего пользователей: {$total}\n⏳ Отправка может занять некоторое время.", mainKeyboard());
+    
+    foreach ($users as $user) {
+        $result = sendMessage($user['telegram_id'], $mail_text, mainKeyboard());
+        if (isset($result['ok']) && $result['ok'] === true) {
+            $sent++;
+        } else {
+            $failed++;
+            $failed_list[] = '@' . $user['username'];
+        }
+        usleep(100000);
+    }
+    
+    $result_text = "📨 <b>Рассылка завершена!</b>\n\n";
+    $result_text .= "✅ Отправлено: <b>{$sent}</b>\n";
+    $result_text .= "❌ Ошибок: <b>{$failed}</b>\n";
+    
+    if (!empty($failed_list)) {
+        $result_text .= "\n❌ Не доставлено:\n" . implode(', ', array_slice($failed_list, 0, 20));
+        if (count($failed_list) > 20) {
+            $result_text .= "\n...и еще " . (count($failed_list) - 20) . " пользователей";
+        }
+    }
+    
+    sendMessage($chat_id, $result_text, mainKeyboard());
+    botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
+    unset($GLOBALS['pending_mailing']);
+}
+
+// ============================================
+// 9. ВСЕ СТАРЫЕ ФУНКЦИИ (ПОЛНОСТЬЮ СОХРАНЕНЫ)
+// ============================================
+
+// ----- 9.1. ОТПУСК -----
 function handleVacation($chat_id, $user_id) {
     global $pdo;
     
@@ -413,27 +684,23 @@ function confirmVacation($chat_id, $user_id, $callback_id) {
     botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
 }
 
-// ============================================
-// 2. 🎁 БОНУС ДНЯ 2.0
-// ============================================
+// ----- 9.2. БОНУС ДНЯ -----
 function handleDailyBonus($chat_id, $user_id) {
     global $pdo;
     
-    $stmt = $pdo->prepare("SELECT * FROM daily_bonuses WHERE user_id = ? AND bonus_date = CURDATE()");
+    $stmt = $pdo->prepare("SELECT * FROM daily_bonuses WHERE user_id = ? AND DATE(created_at) = CURDATE()");
     $stmt->execute([$user_id]);
-    $bonus_today = $stmt->fetch();
+    $today = $stmt->fetch();
     
-    if ($bonus_today) {
-        sendMessage($chat_id, "🎁 Ты уже получил бонус сегодня! Возвращайся завтра.", mainKeyboard());
-        return;
-    }
-    
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE ref_id = ? AND created_at > DATE_SUB(NOW(), INTERVAL 1 DAY)");
-    $stmt->execute([$user_id]);
-    $new_refs = $stmt->fetchColumn();
-    
-    if ($new_refs == 0) {
-        sendMessage($chat_id, "🎁 <b>Бонус дня!</b>\n\nПригласи 1 нового реферала за сутки, чтобы получить <b>50 ₽</b>!\n\n👥 Твоя реферальная ссылка:\n<code>https://t.me/" . BOT_USERNAME . "?start=ref_" . $user_id . "</code>", mainKeyboard());
+    if ($today) {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM daily_bonuses WHERE user_id = ?");
+        $stmt->execute([$user_id]);
+        $total_days = $stmt->fetchColumn();
+        $text = "🎁 <b>Ты уже получал бонус сегодня!</b>\n\n";
+        $text .= "📊 Твой стрик: <b>{$total_days} дней</b>\n";
+        $text .= "💰 Завтра получишь ещё 50 ₽!\n\n";
+        $text .= "⏳ До следующего бонуса: <b>" . getTimeUntilMidnight() . "</b>";
+        sendMessage($chat_id, $text, mainKeyboard());
         return;
     }
     
@@ -441,18 +708,40 @@ function handleDailyBonus($chat_id, $user_id) {
     $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
     $stmt->execute([$bonus, $user_id]);
     
-    $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'daily_bonus', 'Бонус дня (пригласил реферала)', NOW())");
+    $stmt = $pdo->prepare("INSERT INTO daily_bonuses (user_id, amount, created_at) VALUES (?, ?, NOW())");
     $stmt->execute([$user_id, $bonus]);
     
-    $stmt = $pdo->prepare("INSERT INTO daily_bonuses (user_id, bonus_date, amount) VALUES (?, CURDATE(), ?)");
-    $stmt->execute([$user_id, $bonus]);
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM daily_bonuses WHERE user_id = ?");
+    $stmt->execute([$user_id]);
+    $total_days = $stmt->fetchColumn();
     
-    sendMessage($chat_id, "🎁 <b>Бонус дня получен!</b>\n\nТы пригласил $new_refs новых рефералов за сутки!\n💰 Начислено: <b>" . formatRub($bonus) . "</b>", mainKeyboard());
+    $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+    $target = 3000;
+    $remaining = $target - $total_users;
+    $progress = min(($total_users / $target) * 100, 100);
+    
+    $text = "🎁 <b>Ежедневный бонус получен!</b>\n\n";
+    $text .= "💰 Начислено: <b>50 ₽</b>\n";
+    $text .= "📊 Твой стрик: <b>{$total_days} дней</b>\n\n";
+    $text .= "🔥 <b>Скоро будет ещё круче!</b>\n";
+    $text .= "На платформе уже <b>" . number_format($total_users, 0, '.', ' ') . " работников</b>\n";
+    $text .= buildProgressBar($progress, 15) . " " . round($progress) . "%\n";
+    $text .= "⏳ Осталось <b>" . number_format($remaining, 0, '.', ' ') . "</b> до открытия выводов!\n\n";
+    $text .= "📊 <a href='https://artawork.ru'>👉 artawork.ru</a>";
+    
+    sendMessage($chat_id, $text, mainKeyboard());
 }
 
-// ============================================
-// 3. 📨 ПЕРЕСЛАТЬ ДЕНЬГИ (INVITE TRANSFER)
-// ============================================
+function getTimeUntilMidnight() {
+    $now = time();
+    $midnight = strtotime('tomorrow');
+    $diff = $midnight - $now;
+    $hours = floor($diff / 3600);
+    $minutes = floor(($diff % 3600) / 60);
+    return "{$hours} ч {$minutes} мин";
+}
+
+// ----- 9.3. ПЕРЕВОДЫ (INVITE TRANSFER) -----
 function handleTransfer($chat_id, $user_id) {
     global $pdo;
     
@@ -592,9 +881,7 @@ function processInviteTransfer($chat_id, $user_id, $code) {
     sendMessage($chat_id, "✅ <b>Перевод получен!</b>\n\n💰 Начислено: <b>" . formatRub($transfer['amount']) . "</b>\n📨 Отправитель: #" . $transfer['sender_id'], mainKeyboard());
 }
 
-// ============================================
-// 4. 🥊 ДУЭЛИ
-// ============================================
+// ----- 9.4. ДУЭЛИ -----
 function handleDuels($chat_id, $user_id) {
     global $pdo;
     
@@ -824,9 +1111,7 @@ function joinDuel($chat_id, $user_id, $duel_id, $callback_id) {
     botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
 }
 
-// ============================================
-// 5. 👥 РЕФЕРАЛЫ 2.0
-// ============================================
+// ----- 9.5. РЕФЕРАЛЫ -----
 function showReferrals($chat_id, $user_id) {
     global $pdo;
     
@@ -871,9 +1156,7 @@ function showReferrals($chat_id, $user_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
-// ============================================
-// 6. 🔥 СТРИК
-// ============================================
+// ----- 9.6. СТРИК -----
 function handleStreak($chat_id, $user_id) {
     global $pdo;
     
@@ -949,9 +1232,7 @@ function updateStreak($chat_id, $user_id) {
     }
 }
 
-// ============================================
-// 7. 🎯 КВЕСТЫ
-// ============================================
+// ----- 9.7. КВЕСТЫ -----
 function handleQuests($chat_id, $user_id) {
     global $pdo;
     
@@ -999,9 +1280,7 @@ function handleQuests($chat_id, $user_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
-// ============================================
-// 8. 🏆 ТОП-ЛИДЕРЫ
-// ============================================
+// ----- 9.8. ТОП -----
 function handleTop($chat_id, $user_id) {
     global $pdo;
     
@@ -1060,9 +1339,7 @@ function handleTop($chat_id, $user_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
-// ============================================
-// 9. 🎲 КЕЙСЫ / БОКСЫ
-// ============================================
+// ----- 9.9. КЕЙСЫ -----
 function handleCases($chat_id, $user_id) {
     global $pdo;
     
@@ -1167,10 +1444,7 @@ function openCase($chat_id, $user_id, $case_id, $callback_id) {
     botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
 }
 
-// ============================================
-// СТАРЫЕ ФУНКЦИИ (без изменений)
-// ============================================
-
+// ----- 9.10. ЗАДАНИЯ -----
 function showTasks($chat_id, $user_id) {
     global $pdo;
     
@@ -1544,9 +1818,7 @@ function getDaysInProject($user_id) {
     return $stmt->fetchColumn() ?: 0;
 }
 
-// ============================================
-// ВЫВОД СРЕДСТВ
-// ============================================
+// ----- 9.11. ВЫВОД СРЕДСТВ -----
 function showWithdrawMenu($chat_id, $user_id) {
     global $pdo;
     
@@ -1631,11 +1903,11 @@ function processWithdraw($chat_id, $user_id, $data, $callback_id) {
     botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
 }
 
-function handleWithdrawText($chat_id, $text) {
+function handleWithdrawText($chat_id, $user_id, $text) {
     global $pdo;
     
-    $stmt = $pdo->prepare("SELECT id, balance, username, last_withdraw_method, withdraw_waiting_text FROM users WHERE telegram_id = ?");
-    $stmt->execute([$chat_id]);
+    $stmt = $pdo->prepare("SELECT id, balance, username, last_withdraw_method, withdraw_waiting_text FROM users WHERE id = ?");
+    $stmt->execute([$user_id]);
     $user = $stmt->fetch();
     
     if (!$user || $user['withdraw_waiting_text'] != 'yes') return;
@@ -1694,6 +1966,7 @@ function handleWithdrawText($chat_id, $text) {
     sendMessage(ADMIN_ID, $admin_text);
 }
 
+// ----- 9.12. МОИ ВЫВОДЫ -----
 function showMyWithdraws($chat_id, $user_id) {
     global $pdo;
     
@@ -1715,6 +1988,7 @@ function showMyWithdraws($chat_id, $user_id) {
     }
 }
 
+// ----- 9.13. ПРОФИЛЬ -----
 function showProfile($chat_id, $user_id) {
     global $pdo;
     
@@ -1751,6 +2025,7 @@ function showProfile($chat_id, $user_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
+// ----- 9.14. ПОМОЩЬ -----
 function showHelp($chat_id) {
     $text = "❓ <b>Помощь</b>\n\n";
     $text .= "📌 <b>Как заработать?</b>\n";
@@ -1775,6 +2050,7 @@ function showHelp($chat_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
+// ----- 9.15. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ -----
 function getUserBalance($user_id) {
     global $pdo;
     $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
