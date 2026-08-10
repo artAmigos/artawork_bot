@@ -160,21 +160,9 @@ function sendPhoto($chat_id, $photo, $caption = '', $keyboard = null) {
     return botRequest('sendPhoto', $data);
 }
 
-function mainKeyboard() {
-    return [
-        'keyboard' => [
-            [['text' => '💰 Баланс'], ['text' => '📋 Задания']],
-            [['text' => '🎁 Бонус дня'], ['text' => '👥 Рефералы']],
-            [['text' => '💳 Вывод'], ['text' => '💸 Перевод']],
-            [['text' => '👤 Профиль'], ['text' => '❓ Помощь']],
-            [['text' => '🏖️ Отпуск'], ['text' => '🏆 Дуэли']],
-            [['text' => '🔥 Стрик'], ['text' => '🎯 Квесты']],
-            [['text' => '🏆 Топ'], ['text' => '🎲 Кейсы']]
-        ],
-        'resize_keyboard' => true,
-        'one_time_keyboard' => false
-    ];
-}
+// ============================================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (mainKeyboard() УДАЛЕНА - ТЕПЕРЬ В bot.php)
+// ============================================================
 
 function rubToEur($rub) {
     return round($rub * RUB_TO_EUR, 2);
@@ -265,13 +253,12 @@ function checkUserDaysRequirement($user_id, $required_days) {
 }
 
 // ============================================================
-// ГЛАВНАЯ ФУНКЦИЯ КВЕСТОВ - ПОЛНОСТЬЮ ПЕРЕПИСАНА
+// ГЛАВНАЯ ФУНКЦИЯ КВЕСТОВ
 // ============================================================
 function checkAndCompleteQuest($user_id, $quest_key) {
     global $pdo;
     
     try {
-        // Получаем информацию о квесте
         $stmt = $pdo->prepare("SELECT id, reward, name, is_monthly, requirement_days FROM quests WHERE `key` = ?");
         $stmt->execute([$quest_key]);
         $quest = $stmt->fetch();
@@ -280,14 +267,12 @@ function checkAndCompleteQuest($user_id, $quest_key) {
             return false;
         }
         
-        // Проверяем, не выполнен ли квест уже
         $stmt = $pdo->prepare("SELECT id FROM user_quests WHERE user_id = ? AND quest_id = ? AND status = 'completed'");
         $stmt->execute([$user_id, $quest['id']]);
         if ($stmt->fetch()) {
             return false;
         }
         
-        // Проверяем условие для месячных квестов
         if ($quest['is_monthly'] == 1) {
             $stmt = $pdo->prepare("SELECT DATEDIFF(NOW(), created_at) as days FROM users WHERE id = ?");
             $stmt->execute([$user_id]);
@@ -297,15 +282,12 @@ function checkAndCompleteQuest($user_id, $quest_key) {
             }
         }
         
-        // Записываем выполнение квеста
         $stmt = $pdo->prepare("INSERT INTO user_quests (user_id, quest_id, status, completed_at) VALUES (?, ?, 'completed', NOW())");
         $stmt->execute([$user_id, $quest['id']]);
         
-        // Начисляем награду
         $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
         $stmt->execute([$quest['reward'], $user_id]);
         
-        // Записываем транзакцию
         $desc = 'Квест: ' . $quest['name'];
         $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'quest', ?, NOW())");
         $stmt->execute([$user_id, $quest['reward'], $desc]);
@@ -330,4 +312,4 @@ function getReferralPercent($user_id) {
     if ($ref_count >= 5) return 20;
     return 15;
 }
-
+?>
