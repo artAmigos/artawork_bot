@@ -18,6 +18,9 @@ define('RUB_TO_EUR', 0.010);
 // Настройки реферальной программы
 define('REFERRAL_PERCENT', 25);
 
+// Настройки ежедневного бонуса
+define('DAILY_BONUS_AMOUNT', 50);
+
 // Настройки бонусов за активность (стрик)
 define('STREAK_BONUS_1', 10);
 define('STREAK_BONUS_7', 100);
@@ -26,6 +29,7 @@ define('STREAK_BONUS_30', 500);
 // Настройки вывода
 define('MIN_WITHDRAW_RUB', 5000);
 define('MIN_WITHDRAW_EUR', 50);
+define('WITHDRAW_TARGET_USERS', 2000); // 2000 пользователей для открытия выводов
 
 // Настройки дуэлей
 define('DUEL_MIN_BET', 100);
@@ -161,7 +165,7 @@ function sendPhoto($chat_id, $photo, $caption = '', $keyboard = null) {
 }
 
 // ============================================================
-// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (mainKeyboard() УДАЛЕНА - ТЕПЕРЬ В bot.php)
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 // ============================================================
 
 function rubToEur($rub) {

@@ -2,13 +2,14 @@
 require_once 'config.php';
 
 // ============================================
-// НОВОЕ ГЛАВНОЕ МЕНЮ (4 КНОПКИ)
+// ГЛАВНОЕ МЕНЮ (4 КНОПКИ + БОНУС)
 // ============================================
 function mainKeyboard() {
     return [
         'keyboard' => [
             [['text' => '📋 Задания'], ['text' => '🎮 Игры']],
-            [['text' => '👤 Профиль'], ['text' => '❓ Помощь']]
+            [['text' => '👤 Профиль'], ['text' => '❓ Помощь']],
+            [['text' => '🎁 Бонус дня']]
         ],
         'resize_keyboard' => true,
         'one_time_keyboard' => false
@@ -43,6 +44,7 @@ function profileKeyboard() {
             [['text' => '👥 Рефералы', 'callback_data' => 'profile_refs']],
             [['text' => '📊 Мои выводы', 'callback_data' => 'profile_withdraws']],
             [['text' => '📨 Перевод', 'callback_data' => 'profile_transfer']],
+            [['text' => '📊 Статистика', 'callback_data' => 'profile_stats']],
             [['text' => '🔙 Назад', 'callback_data' => 'profile_back']]
         ]
     ];
@@ -54,9 +56,6 @@ function profileKeyboard() {
 function processUpdate($update) {
     global $pdo;
     
-    // ============================================
-    // ОБРАБОТКА СООБЩЕНИЙ
-    // ============================================
     if (isset($update['message'])) {
         $message = $update['message'];
         $chat_id = $message['chat']['id'];
@@ -96,6 +95,13 @@ function processUpdate($update) {
         if ($text == '❓ Помощь') {
             checkAndCompleteQuest($user_id, 'ask_help');
             showHelp($chat_id);
+            return;
+        }
+        
+        // === ЕЖЕДНЕВНЫЙ БОНУС ===
+        if ($text == '🎁 Бонус дня') {
+            checkAndCompleteQuest($user_id, 'take_bonus');
+            handleDailyBonus($chat_id, $user_id);
             return;
         }
         
@@ -192,6 +198,11 @@ function processUpdate($update) {
         }
         if ($data == 'profile_transfer') {
             handleTransfer($chat_id, $user_id);
+            botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
+            return;
+        }
+        if ($data == 'profile_stats') {
+            showPlatformStats($chat_id, $user_id);
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
             return;
         }
@@ -314,7 +325,6 @@ function handleStart($chat_id, $user_id, $text) {
             if ($current_ref == 0 && $ref_id > 0 && $ref_id != $user_id) {
                 $stmt = $pdo->prepare("UPDATE users SET ref_id = ? WHERE id = ?");
                 $stmt->execute([$ref_id, $user_id]);
-                // Бонус за регистрацию по реферальной ссылке
                 $bonus = 50;
                 $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
                 $stmt->execute([$bonus, $user_id]);
@@ -330,22 +340,58 @@ function handleStart($chat_id, $user_id, $text) {
         }
     }
     
-    // Показываем главное меню со статистикой
     showMainStats($chat_id, $user_id);
 }
 
 // ============================================
-// 2. ГЛАВНАЯ СТАТИСТИКА
+// 2. СТАТИСТИКА ПЛАТФОРМЫ (НОВАЯ ФУНКЦИЯ)
+// ============================================
+function showPlatformStats($chat_id, $user_id) {
+    global $pdo;
+    
+    $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+    $total_tasks = $pdo->query("SELECT COUNT(*) FROM user_tasks WHERE status = 'completed'")->fetchColumn();
+    $total_withdraws = $pdo->query("SELECT SUM(amount) FROM withdraws WHERE status = 'approved'")->fetchColumn() ?: 0;
+    $total_balance = $pdo->query("SELECT SUM(balance) FROM users")->fetchColumn() ?: 0;
+    $target = 2000;
+    $remaining = $target - $total_users;
+    $progress = min(($total_users / $target) * 100, 100);
+    
+    $text = "📊 <b>Статистика платформы</b>\n\n";
+    $text .= "👥 Всего пользователей: <b>" . number_format($total_users, 0, '.', ' ') . "</b>\n";
+    $text .= "📋 Выполнено заданий: <b>" . number_format($total_tasks, 0, '.', ' ') . "</b>\n";
+    $text .= "💰 Общий баланс: <b>" . formatRub($total_balance) . "</b>\n";
+    $text .= "💳 Выведено всего: <b>" . formatRub($total_withdraws) . "</b>\n\n";
+    
+    $text .= "🔥 <b>Статус выводов:</b>\n";
+    $text .= "🎯 Цель: <b>" . number_format($target, 0, '.', ' ') . " пользователей</b>\n";
+    $text .= buildProgressBar($progress, 20) . " <b>" . round($progress) . "%</b>\n";
+    $text .= "👥 " . number_format($total_users, 0, '.', ' ') . " / " . number_format($target, 0, '.', ' ') . "\n";
+    
+    if ($total_users >= $target) {
+        $text .= "\n🎉 <b>ВЫВОДЫ ОТКРЫТЫ!</b>\n";
+        $text .= "✅ Все пользователи могут выводить средства!\n";
+        $text .= "💰 Минимальная сумма: " . formatRub(MIN_WITHDRAW_RUB);
+    } else {
+        $text .= "\n⏳ Осталось: <b>" . number_format($remaining, 0, '.', ' ') . " пользователей</b>\n";
+        $text .= "💡 Как только наберём " . number_format($target, 0, '.', ' ') . " — выводы откроются!\n";
+        $text .= "🔥 Приглашай друзей и приближай момент!";
+    }
+    
+    sendMessage($chat_id, $text, mainKeyboard());
+}
+
+// ============================================
+// 3. ГЛАВНАЯ СТАТИСТИКА (УЛУЧШЕНА)
 // ============================================
 function showMainStats($chat_id, $user_id) {
     global $pdo;
     
     $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
-    $target = 3000;
+    $target = 2000;
     $remaining = $target - $total_users;
     $progress = min(($total_users / $target) * 100, 100);
     
-    // Проверяем рубежи
     checkMilestones();
     
     $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
@@ -356,18 +402,20 @@ function showMainStats($chat_id, $user_id) {
     $text .= "💰 Твой баланс: <b>" . formatRub($balance) . "</b>\n";
     $text .= "💶 ≈ " . rubToEur($balance) . " €\n\n";
     
-    $text .= "🔥 <b>До открытия выплат:</b>\n";
+    $text .= "🔥 <b>Статус выводов:</b>\n";
     $text .= buildProgressBar($progress, 15) . " " . round($progress) . "%\n";
     $text .= "👥 " . number_format($total_users, 0, '.', ' ') . " / " . number_format($target, 0, '.', ' ') . "\n";
-    $text .= "⏳ Осталось: " . number_format($remaining, 0, '.', ' ') . " работников\n\n";
     
     if ($total_users >= $target) {
         $text .= "🎉 <b>ВЫВОДЫ ОТКРЫТЫ!</b>\n\n";
+        $text .= "✅ Ты можешь выводить средства!\n";
+        $text .= "💰 Минимальная сумма: " . formatRub(MIN_WITHDRAW_RUB);
     } else {
+        $text .= "⏳ Осталось: " . number_format($remaining, 0, '.', ' ') . " работников\n\n";
         $text .= "💡 <b>Что нужно сделать?</b>\n";
         $text .= "1. 📋 Выполняй задания — зарабатывай!\n";
         $text .= "2. 👥 Приглашай друзей — получай бонусы!\n";
-        $text .= "3. 🎁 Забирай ежедневный бонус!\n";
+        $text .= "3. 🎁 Забирай ежедневный бонус 50 ₽!\n";
         $text .= "4. 🚀 Следи за ростом платформы!\n\n";
     }
     
@@ -377,7 +425,7 @@ function showMainStats($chat_id, $user_id) {
 }
 
 // ============================================
-// 3. ПРОГРЕСС-БАР
+// 4. ПРОГРЕСС-БАР
 // ============================================
 function buildProgressBar($percent, $length = 20) {
     $filled = round(($percent / 100) * $length);
@@ -387,13 +435,13 @@ function buildProgressBar($percent, $length = 20) {
 }
 
 // ============================================
-// 4. ПРОВЕРКА РУБЕЖЕЙ
+// 5. ПРОВЕРКА РУБЕЖЕЙ (2000)
 // ============================================
 function checkMilestones() {
     global $pdo;
     
     $total = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
-    $milestones = [100, 500, 1000, 1500, 2000, 2500, 2800, 2900, 2950, 2990, 2995, 2999];
+    $milestones = [100, 500, 1000, 1500, 1800, 1900, 1950, 1980, 1990, 1995, 1999, 2000];
     
     foreach ($milestones as $ms) {
         if ($total >= $ms && !isMilestoneNotified($ms)) {
@@ -419,7 +467,8 @@ function markMilestoneNotified($milestone) {
 function sendMilestoneNotification($count) {
     global $pdo;
     
-    $remaining = 3000 - $count;
+    $target = 2000;
+    $remaining = $target - $count;
     $text = "🎉 <b>НОВЫЙ РУБЕЖ!</b>\n\n";
     $text .= "👥 Нас уже <b>" . number_format($count, 0, '.', ' ') . "</b> человек!\n";
     
@@ -443,7 +492,7 @@ function sendMilestoneNotification($count) {
 }
 
 // ============================================
-// 5. ПОКАЗАТЬ МЕНЮ ИГР
+// 6. ПОКАЗАТЬ МЕНЮ ИГР
 // ============================================
 function showGamesMenu($chat_id, $user_id) {
     $text = "🎮 <b>Игровой раздел</b>\n\n";
@@ -457,7 +506,7 @@ function showGamesMenu($chat_id, $user_id) {
 }
 
 // ============================================
-// 6. ПОКАЗАТЬ МЕНЮ ПРОФИЛЬ
+// 7. ПОКАЗАТЬ МЕНЮ ПРОФИЛЬ (УЛУЧШЕН)
 // ============================================
 function showProfileMenu($chat_id, $user_id) {
     global $pdo;
@@ -466,16 +515,28 @@ function showProfileMenu($chat_id, $user_id) {
     $stmt->execute([$user_id]);
     $balance = $stmt->fetchColumn();
     
+    $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+    $target = 2000;
+    
     $text = "👤 <b>Твой профиль</b>\n\n";
     $text .= "💰 Баланс: <b>" . formatRub($balance) . "</b>\n";
     $text .= "💶 ≈ " . rubToEur($balance) . " €\n\n";
+    $text .= "👥 Всего пользователей: <b>" . number_format($total_users, 0, '.', ' ') . "</b>\n";
+    $text .= "🎯 До открытия выводов: <b>" . number_format($target, 0, '.', ' ') . "</b>\n";
+    
+    if ($total_users >= $target) {
+        $text .= "✅ <b>Выводы открыты!</b>\n\n";
+    } else {
+        $text .= "⏳ Осталось: <b>" . number_format($target - $total_users, 0, '.', ' ') . "</b>\n\n";
+    }
+    
     $text .= "Выбери действие:";
     
     sendMessage($chat_id, $text, profileKeyboard());
 }
 
 // ============================================
-// 7. ПОКАЗАТЬ БАЛАНС
+// 8. ПОКАЗАТЬ БАЛАНС (УЛУЧШЕН)
 // ============================================
 function showBalance($chat_id, $user_id) {
     global $pdo;
@@ -486,16 +547,163 @@ function showBalance($chat_id, $user_id) {
     $stmt->execute([$user_id]);
     $balance = $stmt->fetchColumn();
     
+    $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+    $target = 2000;
+    
     $text = "💰 <b>Твой баланс</b>\n\n";
     $text .= "💵 <b>" . formatRub($balance) . "</b>\n";
     $text .= "💶 ≈ " . rubToEur($balance) . " €\n\n";
-    $text .= "📊 Минимальный вывод: " . formatRub(MIN_WITHDRAW_RUB) . " (≈" . rubToEur(MIN_WITHDRAW_RUB) . " €)";
+    $text .= "👥 Всего пользователей: <b>" . number_format($total_users, 0, '.', ' ') . "</b>\n";
+    
+    if ($total_users >= $target) {
+        $text .= "✅ <b>Выводы открыты!</b>\n";
+        $text .= "💰 Минимальный вывод: " . formatRub(MIN_WITHDRAW_RUB);
+    } else {
+        $text .= "⏳ До открытия выводов: <b>" . number_format($target - $total_users, 0, '.', ' ') . "</b> пользователей";
+    }
     
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
 // ============================================
-// 8. ОБРАБОТКА РАССЫЛКИ (АДМИН)
+// 9. ЕЖЕДНЕВНЫЙ БОНУС 50 ₽
+// ============================================
+function handleDailyBonus($chat_id, $user_id) {
+    global $pdo;
+    
+    $stmt = $pdo->prepare("SELECT * FROM daily_bonuses WHERE user_id = ? AND DATE(created_at) = CURDATE()");
+    $stmt->execute([$user_id]);
+    $today = $stmt->fetch();
+    
+    if ($today) {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM daily_bonuses WHERE user_id = ?");
+        $stmt->execute([$user_id]);
+        $total_days = $stmt->fetchColumn();
+        $text = "🎁 <b>Ты уже получал бонус сегодня!</b>\n\n";
+        $text .= "📊 Твой стрик: <b>{$total_days} дней</b>\n";
+        $text .= "💰 Завтра получишь ещё 50 ₽!\n\n";
+        $text .= "⏳ До следующего бонуса: <b>" . getTimeUntilMidnight() . "</b>";
+        sendMessage($chat_id, $text, mainKeyboard());
+        return;
+    }
+    
+    $bonus = 50;
+    $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
+    $stmt->execute([$bonus, $user_id]);
+    
+    $stmt = $pdo->prepare("INSERT INTO daily_bonuses (user_id, amount, created_at) VALUES (?, ?, NOW())");
+    $stmt->execute([$user_id, $bonus]);
+    
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM daily_bonuses WHERE user_id = ?");
+    $stmt->execute([$user_id]);
+    $total_days = $stmt->fetchColumn();
+    
+    $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+    $target = 2000;
+    $remaining = $target - $total_users;
+    $progress = min(($total_users / $target) * 100, 100);
+    
+    $text = "🎁 <b>Ежедневный бонус получен!</b>\n\n";
+    $text .= "💰 Начислено: <b>50 ₽</b>\n";
+    $text .= "📊 Твой стрик: <b>{$total_days} дней</b>\n\n";
+    $text .= "🔥 <b>Скоро будет ещё круче!</b>\n";
+    $text .= "На платформе уже <b>" . number_format($total_users, 0, '.', ' ') . " работников</b>\n";
+    $text .= buildProgressBar($progress, 15) . " " . round($progress) . "%\n";
+    
+    if ($total_users >= $target) {
+        $text .= "🎉 <b>ВЫВОДЫ ОТКРЫТЫ!</b>";
+    } else {
+        $text .= "⏳ Осталось <b>" . number_format($remaining, 0, '.', ' ') . "</b> до открытия выводов!";
+    }
+    
+    sendMessage($chat_id, $text, mainKeyboard());
+}
+
+function getTimeUntilMidnight() {
+    $now = time();
+    $midnight = strtotime('tomorrow');
+    $diff = $midnight - $now;
+    $hours = floor($diff / 3600);
+    $minutes = floor(($diff % 3600) / 60);
+    return "{$hours} ч {$minutes} мин";
+}
+
+// ============================================
+// 10. ВЫВОД СРЕДСТВ (УЛУЧШЕН)
+// ============================================
+function showWithdrawMenu($chat_id, $user_id) {
+    global $pdo;
+    
+    $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+    $target = 2000;
+    
+    if (hasActiveWithdraw($user_id)) {
+        sendMessage($chat_id, "⚠️ У тебя уже есть активная заявка на вывод!", mainKeyboard());
+        return;
+    }
+    
+    $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
+    $stmt->execute([$user_id]);
+    $balance = $stmt->fetchColumn();
+    
+    if ($balance < MIN_WITHDRAW_RUB) {
+        sendMessage($chat_id, "❌ Минимальная сумма для вывода: " . formatRub(MIN_WITHDRAW_RUB) . "\n\nТвой баланс: " . formatRub($balance), mainKeyboard());
+        return;
+    }
+    
+    $text = "💳 <b>Вывод средств</b>\n\n";
+    $text .= "💰 Твой баланс: <b>" . formatRub($balance) . "</b>\n";
+    $text .= "💶 ≈ " . rubToEur($balance) . " €\n";
+    $text .= "👥 Всего пользователей: <b>" . number_format($total_users, 0, '.', ' ') . "</b>\n\n";
+    
+    if ($total_users >= $target) {
+        $text .= "🎉 <b>ВЫВОДЫ ОТКРЫТЫ!</b>\n\n";
+        $text .= "📝 <b>Как вывести:</b>\n";
+        $text .= "1. Напиши администратору @artawork_support\n";
+        $text .= "2. Укажи сумму и реквизиты\n";
+        $text .= "3. Деньги придут в течение 24 часов\n\n";
+        $text .= "💎 Способы вывода:\n";
+        $text .= "• 💎 USDT TRC20 (мин. " . formatRub(MIN_WITHDRAW_RUB) . ")\n";
+        $text .= "• 💳 Банковская карта (мин. " . formatRub(MIN_WITHDRAW_RUB) . ")";
+        
+        $inlineKeyboard = [
+            'inline_keyboard' => [
+                [['text' => '💎 Криптокошелёк', 'callback_data' => 'withdraw_crypto']],
+                [['text' => '🏦 Банковский счёт', 'callback_data' => 'withdraw_bank']],
+                [['text' => '❌ Отмена', 'callback_data' => 'withdraw_cancel']]
+            ]
+        ];
+        sendMessage($chat_id, $text, $inlineKeyboard);
+    } else {
+        $remaining = $target - $total_users;
+        $progress = min(($total_users / $target) * 100, 100);
+        
+        $text .= "⏳ <b>Вывод временно недоступен</b>\n\n";
+        $text .= "📊 <b>Прогресс открытия выводов:</b>\n";
+        $text .= buildProgressBar($progress, 20) . " <b>" . round($progress) . "%</b>\n";
+        $text .= "👥 Пользователей: <b>" . number_format($total_users, 0, '.', ' ') . "</b>\n";
+        $text .= "🎯 Нужно: <b>" . number_format($target, 0, '.', ' ') . "</b>\n";
+        $text .= "⏳ Осталось: <b>" . number_format($remaining, 0, '.', ' ') . " человек</b>\n\n";
+        
+        $text .= "💡 <b>Как ускорить открытие выводов?</b>\n";
+        $text .= "• Приглашай друзей 👥\n";
+        $text .= "• Выполняй задания 📋\n";
+        $text .= "• Забирай ежедневный бонус 🎁\n\n";
+        
+        $text .= "📈 <a href='https://artawork.ru'>👉 artawork.ru</a>";
+        
+        $inlineKeyboard = [
+            'inline_keyboard' => [
+                [['text' => '🔄 Обновить', 'callback_data' => 'profile_withdraw']],
+                [['text' => '👥 Пригласить друзей', 'callback_data' => 'profile_refs']]
+            ]
+        ];
+        sendMessage($chat_id, $text, $inlineKeyboard);
+    }
+}
+
+// ============================================
+// 11. ОБРАБОТКА РАССЫЛКИ (АДМИН)
 // ============================================
 function handleAdminMail($chat_id, $text) {
     global $pdo;
@@ -624,10 +832,10 @@ function handleMailConfirm($chat_id, $callback_id) {
 }
 
 // ============================================
-// 9. ВСЕ СТАРЫЕ ФУНКЦИИ (ПОЛНОСТЬЮ СОХРАНЕНЫ)
+// 12. ВСЕ СТАРЫЕ ФУНКЦИИ (ПОЛНОСТЬЮ СОХРАНЕНЫ)
 // ============================================
 
-// ----- 9.1. ОТПУСК -----
+// ----- 12.1. ОТПУСК -----
 function handleVacation($chat_id, $user_id) {
     global $pdo;
     
@@ -684,64 +892,7 @@ function confirmVacation($chat_id, $user_id, $callback_id) {
     botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
 }
 
-// ----- 9.2. БОНУС ДНЯ -----
-function handleDailyBonus($chat_id, $user_id) {
-    global $pdo;
-    
-    $stmt = $pdo->prepare("SELECT * FROM daily_bonuses WHERE user_id = ? AND DATE(created_at) = CURDATE()");
-    $stmt->execute([$user_id]);
-    $today = $stmt->fetch();
-    
-    if ($today) {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM daily_bonuses WHERE user_id = ?");
-        $stmt->execute([$user_id]);
-        $total_days = $stmt->fetchColumn();
-        $text = "🎁 <b>Ты уже получал бонус сегодня!</b>\n\n";
-        $text .= "📊 Твой стрик: <b>{$total_days} дней</b>\n";
-        $text .= "💰 Завтра получишь ещё 50 ₽!\n\n";
-        $text .= "⏳ До следующего бонуса: <b>" . getTimeUntilMidnight() . "</b>";
-        sendMessage($chat_id, $text, mainKeyboard());
-        return;
-    }
-    
-    $bonus = 50;
-    $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
-    $stmt->execute([$bonus, $user_id]);
-    
-    $stmt = $pdo->prepare("INSERT INTO daily_bonuses (user_id, amount, created_at) VALUES (?, ?, NOW())");
-    $stmt->execute([$user_id, $bonus]);
-    
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM daily_bonuses WHERE user_id = ?");
-    $stmt->execute([$user_id]);
-    $total_days = $stmt->fetchColumn();
-    
-    $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
-    $target = 3000;
-    $remaining = $target - $total_users;
-    $progress = min(($total_users / $target) * 100, 100);
-    
-    $text = "🎁 <b>Ежедневный бонус получен!</b>\n\n";
-    $text .= "💰 Начислено: <b>50 ₽</b>\n";
-    $text .= "📊 Твой стрик: <b>{$total_days} дней</b>\n\n";
-    $text .= "🔥 <b>Скоро будет ещё круче!</b>\n";
-    $text .= "На платформе уже <b>" . number_format($total_users, 0, '.', ' ') . " работников</b>\n";
-    $text .= buildProgressBar($progress, 15) . " " . round($progress) . "%\n";
-    $text .= "⏳ Осталось <b>" . number_format($remaining, 0, '.', ' ') . "</b> до открытия выводов!\n\n";
-    $text .= "📊 <a href='https://artawork.ru'>👉 artawork.ru</a>";
-    
-    sendMessage($chat_id, $text, mainKeyboard());
-}
-
-function getTimeUntilMidnight() {
-    $now = time();
-    $midnight = strtotime('tomorrow');
-    $diff = $midnight - $now;
-    $hours = floor($diff / 3600);
-    $minutes = floor(($diff % 3600) / 60);
-    return "{$hours} ч {$minutes} мин";
-}
-
-// ----- 9.3. ПЕРЕВОДЫ (INVITE TRANSFER) -----
+// ----- 12.2. ПЕРЕВОДЫ (INVITE TRANSFER) -----
 function handleTransfer($chat_id, $user_id) {
     global $pdo;
     
@@ -881,7 +1032,7 @@ function processInviteTransfer($chat_id, $user_id, $code) {
     sendMessage($chat_id, "✅ <b>Перевод получен!</b>\n\n💰 Начислено: <b>" . formatRub($transfer['amount']) . "</b>\n📨 Отправитель: #" . $transfer['sender_id'], mainKeyboard());
 }
 
-// ----- 9.4. ДУЭЛИ -----
+// ----- 12.3. ДУЭЛИ -----
 function handleDuels($chat_id, $user_id) {
     global $pdo;
     
@@ -1111,7 +1262,7 @@ function joinDuel($chat_id, $user_id, $duel_id, $callback_id) {
     botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
 }
 
-// ----- 9.5. РЕФЕРАЛЫ -----
+// ----- 12.4. РЕФЕРАЛЫ -----
 function showReferrals($chat_id, $user_id) {
     global $pdo;
     
@@ -1156,7 +1307,7 @@ function showReferrals($chat_id, $user_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
-// ----- 9.6. СТРИК -----
+// ----- 12.5. СТРИК -----
 function handleStreak($chat_id, $user_id) {
     global $pdo;
     
@@ -1232,7 +1383,7 @@ function updateStreak($chat_id, $user_id) {
     }
 }
 
-// ----- 9.7. КВЕСТЫ -----
+// ----- 12.6. КВЕСТЫ -----
 function handleQuests($chat_id, $user_id) {
     global $pdo;
     
@@ -1280,7 +1431,7 @@ function handleQuests($chat_id, $user_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
-// ----- 9.8. ТОП -----
+// ----- 12.7. ТОП -----
 function handleTop($chat_id, $user_id) {
     global $pdo;
     
@@ -1339,7 +1490,7 @@ function handleTop($chat_id, $user_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
-// ----- 9.9. КЕЙСЫ -----
+// ----- 12.8. КЕЙСЫ -----
 function handleCases($chat_id, $user_id) {
     global $pdo;
     
@@ -1444,7 +1595,7 @@ function openCase($chat_id, $user_id, $case_id, $callback_id) {
     botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
 }
 
-// ----- 9.10. ЗАДАНИЯ -----
+// ----- 12.9. ЗАДАНИЯ -----
 function showTasks($chat_id, $user_id) {
     global $pdo;
     
@@ -1818,44 +1969,7 @@ function getDaysInProject($user_id) {
     return $stmt->fetchColumn() ?: 0;
 }
 
-// ----- 9.11. ВЫВОД СРЕДСТВ -----
-function showWithdrawMenu($chat_id, $user_id) {
-    global $pdo;
-    
-    if (hasActiveWithdraw($user_id)) {
-        sendMessage($chat_id, "⚠️ У тебя уже есть активная заявка на вывод!\n\nОжидай её обработки.", mainKeyboard());
-        return;
-    }
-    
-    $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
-    $stmt->execute([$user_id]);
-    $balance = $stmt->fetchColumn();
-    
-    if ($balance < MIN_WITHDRAW_RUB) {
-        sendMessage($chat_id, "❌ Минимальная сумма для вывода: " . formatRub(MIN_WITHDRAW_RUB) . "\n\nТвой баланс: " . formatRub($balance), mainKeyboard());
-        return;
-    }
-    
-    $text = "💳 <b>Вывод средств</b>\n\n";
-    $text .= "💰 Твой баланс: <b>" . formatRub($balance) . "</b>\n";
-    $text .= "💶 ≈ " . rubToEur($balance) . " €\n\n";
-    $text .= "Выбери способ вывода:\n";
-    $text .= "💰 Будет выведена <b>ВСЯ СУММА</b> с баланса!\n\n";
-    $text .= "📝 После выбора способа напиши реквизиты:\n";
-    $text .= "• Для крипто: адрес кошелька USDT TRC20\n";
-    $text .= "• Для банка: номер карты и ФИО владельца";
-    
-    $inlineKeyboard = [
-        'inline_keyboard' => [
-            [['text' => '💎 Криптокошелёк (USDT TRC20)', 'callback_data' => 'withdraw_crypto']],
-            [['text' => '🏦 Банковский счёт / Карта', 'callback_data' => 'withdraw_bank']],
-            [['text' => '❌ Отмена', 'callback_data' => 'withdraw_cancel']]
-        ]
-    ];
-    
-    sendMessage($chat_id, $text, $inlineKeyboard);
-}
-
+// ----- 12.10. ВЫВОД СРЕДСТВ (ПРОДОЛЖЕНИЕ) -----
 function processWithdraw($chat_id, $user_id, $data, $callback_id) {
     global $pdo;
     
@@ -1966,7 +2080,7 @@ function handleWithdrawText($chat_id, $user_id, $text) {
     sendMessage(ADMIN_ID, $admin_text);
 }
 
-// ----- 9.12. МОИ ВЫВОДЫ -----
+// ----- 12.11. МОИ ВЫВОДЫ -----
 function showMyWithdraws($chat_id, $user_id) {
     global $pdo;
     
@@ -1988,7 +2102,7 @@ function showMyWithdraws($chat_id, $user_id) {
     }
 }
 
-// ----- 9.13. ПРОФИЛЬ -----
+// ----- 12.12. ПРОФИЛЬ -----
 function showProfile($chat_id, $user_id) {
     global $pdo;
     
@@ -2025,7 +2139,7 @@ function showProfile($chat_id, $user_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
-// ----- 9.14. ПОМОЩЬ -----
+// ----- 12.13. ПОМОЩЬ -----
 function showHelp($chat_id) {
     $text = "❓ <b>Помощь</b>\n\n";
     $text .= "📌 <b>Как заработать?</b>\n";
@@ -2050,7 +2164,7 @@ function showHelp($chat_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
-// ----- 9.15. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ -----
+// ----- 12.14. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ -----
 function getUserBalance($user_id) {
     global $pdo;
     $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
