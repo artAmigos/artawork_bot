@@ -565,13 +565,15 @@ function showBalance($chat_id, $user_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
+
 // ============================================
-// 9. ЕЖЕДНЕВНЫЙ БОНУС 50 ₽
+// 9. ЕЖЕДНЕВНЫЙ БОНУС 50 ₽ (ИСПРАВЛЕН)
 // ============================================
 function handleDailyBonus($chat_id, $user_id) {
     global $pdo;
     
-    $stmt = $pdo->prepare("SELECT * FROM daily_bonuses WHERE user_id = ? AND DATE(created_at) = CURDATE()");
+    // Проверяем, получал ли бонус сегодня (используем bonus_date, а не created_at)
+    $stmt = $pdo->prepare("SELECT * FROM daily_bonuses WHERE user_id = ? AND bonus_date = CURDATE()");
     $stmt->execute([$user_id]);
     $today = $stmt->fetch();
     
@@ -579,6 +581,7 @@ function handleDailyBonus($chat_id, $user_id) {
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM daily_bonuses WHERE user_id = ?");
         $stmt->execute([$user_id]);
         $total_days = $stmt->fetchColumn();
+        
         $text = "🎁 <b>Ты уже получал бонус сегодня!</b>\n\n";
         $text .= "📊 Твой стрик: <b>{$total_days} дней</b>\n";
         $text .= "💰 Завтра получишь ещё 50 ₽!\n\n";
@@ -591,7 +594,7 @@ function handleDailyBonus($chat_id, $user_id) {
     $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
     $stmt->execute([$bonus, $user_id]);
     
-    $stmt = $pdo->prepare("INSERT INTO daily_bonuses (user_id, amount, created_at) VALUES (?, ?, NOW())");
+    $stmt = $pdo->prepare("INSERT INTO daily_bonuses (user_id, bonus_date, amount, created_at) VALUES (?, CURDATE(), ?, NOW())");
     $stmt->execute([$user_id, $bonus]);
     
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM daily_bonuses WHERE user_id = ?");
@@ -627,7 +630,6 @@ function getTimeUntilMidnight() {
     $minutes = floor(($diff % 3600) / 60);
     return "{$hours} ч {$minutes} мин";
 }
-
 // ============================================
 // 10. ВЫВОД СРЕДСТВ (УЛУЧШЕН)
 // ============================================

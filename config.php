@@ -39,7 +39,8 @@ define('DUEL_ACTIVE_LIMIT', 2);
 define('DUEL_DURATION', 24);
 define('DUEL_WIN_POINTS', 50);
 define('DUEL_LOSS_POINTS', -50);
-
+// Настройки ежедневного бонуса
+define('DAILY_BONUS_AMOUNT', 50);
 // Настройки переводов (P2P)
 define('TRANSFER_MIN_AMOUNT', 10);
 define('TRANSFER_MAX_AMOUNT', 5000);
