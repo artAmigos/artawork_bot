@@ -5,10 +5,6 @@ require_once 'config.php';
 // 🟣 ФИОЛЕТОВЫЙ СТИЛЬ КНОПОК
 // ============================================
 
-/**
- * Стилизованные кнопки с фиолетовым оформлением
- * Используются декоративные эмодзи для красоты
- */
 function styleButton($text, $emoji = '') {
     return ['text' => ($emoji ? $emoji . ' ' : '') . $text];
 }
@@ -18,7 +14,7 @@ function styleInlineButton($text, $callback, $emoji = '') {
 }
 
 // ============================================
-// 🌟 ГЛАВНОЕ МЕНЮ (СТИЛИЗОВАННОЕ)
+// 🌟 ГЛАВНОЕ МЕНЮ
 // ============================================
 function mainKeyboard() {
     return [
@@ -42,7 +38,7 @@ function mainKeyboard() {
 }
 
 // ============================================
-// 🎮 ПОДМЕНЮ "ИГРЫ" (ФИОЛЕТОВЫЙ СТИЛЬ)
+// 🎮 ПОДМЕНЮ "ИГРЫ"
 // ============================================
 function gamesKeyboard() {
     return [
@@ -67,7 +63,7 @@ function gamesKeyboard() {
 }
 
 // ============================================
-// 👤 ПОДМЕНЮ "ПРОФИЛЬ" (ФИОЛЕТОВЫЙ СТИЛЬ)
+// 👤 ПОДМЕНЮ "ПРОФИЛЬ"
 // ============================================
 function profileKeyboard() {
     return [
@@ -92,7 +88,7 @@ function profileKeyboard() {
 }
 
 // ============================================
-// 💰 МЕНЮ ВЫВОДА (ФИОЛЕТОВЫЙ СТИЛЬ)
+// 💰 МЕНЮ ВЫВОДА
 // ============================================
 function withdrawKeyboard() {
     return [
@@ -109,7 +105,7 @@ function withdrawKeyboard() {
 }
 
 // ============================================
-// 🎲 МЕНЮ КЕЙСОВ (ФИОЛЕТОВЫЙ СТИЛЬ)
+// 🎲 МЕНЮ КЕЙСОВ
 // ============================================
 function casesKeyboard() {
     return [
@@ -122,7 +118,7 @@ function casesKeyboard() {
 }
 
 // ============================================
-// ⚔️ МЕНЮ ДУЭЛЕЙ (ФИОЛЕТОВЫЙ СТИЛЬ)
+// ⚔️ МЕНЮ ДУЭЛЕЙ
 // ============================================
 function duelKeyboard() {
     return [
@@ -141,7 +137,7 @@ function duelKeyboard() {
 }
 
 // ============================================
-// 📨 МЕНЮ ПЕРЕВОДОВ (ФИОЛЕТОВЫЙ СТИЛЬ)
+// 📨 МЕНЮ ПЕРЕВОДОВ
 // ============================================
 function transferKeyboard() {
     return [
@@ -160,7 +156,7 @@ function transferKeyboard() {
 }
 
 // ============================================
-// 🏖️ МЕНЮ ОТПУСКА (ФИОЛЕТОВЫЙ СТИЛЬ)
+// 🏖️ МЕНЮ ОТПУСКА
 // ============================================
 function vacationKeyboard() {
     return [
@@ -174,7 +170,7 @@ function vacationKeyboard() {
 }
 
 // ============================================
-// 📋 МЕНЮ ЗАДАНИЙ (ФИОЛЕТОВЫЙ СТИЛЬ)
+// 📋 МЕНЮ ЗАДАНИЙ
 // ============================================
 function tasksKeyboard($tasks) {
     $keyboard = ['inline_keyboard' => []];
@@ -190,7 +186,7 @@ function tasksKeyboard($tasks) {
 }
 
 // ============================================
-// 📌 ДЕТАЛЬНОЕ МЕНЮ ЗАДАНИЯ (ФИОЛЕТОВЫЙ СТИЛЬ)
+// 📌 ДЕТАЛЬНОЕ МЕНЮ ЗАДАНИЯ
 // ============================================
 function taskDetailKeyboard($task_id) {
     return [
@@ -206,7 +202,7 @@ function taskDetailKeyboard($task_id) {
 }
 
 // ============================================
-// 📨 МЕНЮ РАССЫЛКИ (ФИОЛЕТОВЫЙ СТИЛЬ)
+// 📨 МЕНЮ РАССЫЛКИ
 // ============================================
 function mailingKeyboard() {
     return [
@@ -254,6 +250,150 @@ function formatInfo($text) {
 }
 
 // ============================================
+// 🔥 СИСТЕМА СТРИКА (УЛУЧШЕННАЯ)
+// ============================================
+
+/**
+ * Получить бонус за стрик в зависимости от количества дней
+ * Прогрессивная шкала: чем больше стрик, тем больше бонус
+ */
+function getStreakBonus($streak) {
+    // Базовые бонусы за ключевые дни
+    $bonuses = [
+        1 => 10,    // 1 день - 10 ₽
+        3 => 25,    // 3 дня - 25 ₽
+        5 => 50,    // 5 дней - 50 ₽
+        7 => 100,   // 7 дней - 100 ₽
+        10 => 150,  // 10 дней - 150 ₽
+        14 => 200,  // 14 дней - 200 ₽
+        21 => 300,  // 21 день - 300 ₽
+        30 => 500,  // 30 дней - 500 ₽
+        60 => 800,  // 60 дней - 800 ₽
+        90 => 1200, // 90 дней - 1200 ₽
+        180 => 2000,// 180 дней - 2000 ₽
+        365 => 5000 // 365 дней - 5000 ₽
+    ];
+    
+    // Если есть точное совпадение - возвращаем бонус
+    if (isset($bonuses[$streak])) {
+        return $bonuses[$streak];
+    }
+    
+    // Прогрессивный бонус за каждый день после 30-го
+    if ($streak > 30) {
+        // Бонус = 500 + (streak - 30) * 5, но не более 5000
+        $bonus = 500 + ($streak - 30) * 5;
+        return min($bonus, 5000);
+    }
+    
+    // Для стриков между ключевыми днями (2,4,6,8,9,11-13,15-20,22-29)
+    // Бонус растёт постепенно
+    if ($streak > 0) {
+        return round(($streak / 7) * 100, 0); // ~14 ₽ за день
+    }
+    
+    return 0;
+}
+
+/**
+ * Обновление стрика пользователя
+ * Вызывается при любом действии пользователя
+ */
+function updateStreak($chat_id, $user_id) {
+    global $pdo;
+    
+    if (!$user_id) return;
+    
+    $stmt = $pdo->prepare("SELECT daily_streak, last_streak_date, vacation_used_at, balance FROM users WHERE id = ?");
+    $stmt->execute([$user_id]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$user) return;
+    
+    $today = date('Y-m-d');
+    $last_date = $user['last_streak_date'];
+    $streak = (int)($user['daily_streak'] ?? 0);
+    $vacation_date = $user['vacation_used_at'] ?? null;
+    
+    // Если сегодня уже обновляли - выходим
+    if ($last_date && $last_date == $today) {
+        return;
+    }
+    
+    $yesterday = date('Y-m-d', strtotime('-1 day'));
+    $is_vacation_yesterday = ($vacation_date && $vacation_date == $yesterday);
+    
+    // Если вчера был отпуск - просто обновляем дату без изменения стрика
+    if ($is_vacation_yesterday) {
+        $stmt = $pdo->prepare("UPDATE users SET last_streak_date = ? WHERE id = ?");
+        $stmt->execute([$today, $user_id]);
+        return;
+    }
+    
+    // Проверяем, был ли пользователь активен вчера
+    if ($last_date && $last_date == $yesterday) {
+        $streak++; // Увеличиваем стрик
+    } else {
+        $streak = 1; // Сбрасываем на 1 (первый день)
+    }
+    
+    // Получаем бонус за текущий стрик
+    $bonus = getStreakBonus($streak);
+    
+    // Обновляем стрик
+    $stmt = $pdo->prepare("UPDATE users SET daily_streak = ?, last_streak_date = ? WHERE id = ?");
+    $stmt->execute([$streak, $today, $user_id]);
+    
+    // Если есть бонус - начисляем и отправляем уведомление
+    if ($bonus > 0) {
+        $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
+        $stmt->execute([$bonus, $user_id]);
+        
+        $desc = '🔥 Бонус стрика (день ' . $streak . '): +' . formatRub($bonus);
+        $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'streak_bonus', ?, NOW())");
+        $stmt->execute([$user_id, $bonus, $desc]);
+        
+        // Отправляем уведомление о бонусе
+        if ($chat_id) {
+            $text = "🔥 <b>БОНУС СТРИКА!</b>\n";
+            $text .= decorativeDivider();
+            $text .= "📊 День <b>{$streak}</b> подряд!\n";
+            $text .= "💰 Начислено: <b>" . formatRub($bonus) . "</b>\n";
+            $text .= "💶 ≈ " . rubToEur($bonus) . " €\n\n";
+            
+            // Показываем следующий бонус
+            $next_bonus = getStreakBonus($streak + 1);
+            if ($next_bonus > $bonus) {
+                $text .= "🎯 Следующий бонус (день " . ($streak + 1) . "): <b>" . formatRub($next_bonus) . "</b>\n";
+            }
+            
+            // Специальные поздравления
+            if ($streak == 7) {
+                $text .= "\n🎉 Ты продержался целую неделю! Так держать!";
+            } elseif ($streak == 30) {
+                $text .= "\n🌟 Целый месяц! Ты настоящий герой!";
+            } elseif ($streak == 100) {
+                $text .= "\n🏆 100 ДНЕЙ! Ты легенда!";
+            } elseif ($streak == 365) {
+                $text .= "\n👑 ГОД! Ты король стрика!";
+            }
+            
+            sendMessage($chat_id, $text, mainKeyboard());
+        }
+    }
+}
+
+// ============================================
+// ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ ID
+// ============================================
+function getUserIdByTelegramId($telegram_id) {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE telegram_id = ?");
+    $stmt->execute([$telegram_id]);
+    return $stmt->fetchColumn();
+}
+
+// ============================================
 // 🔄 ОБРАБОТКА ВХОДЯЩИХ ОБНОВЛЕНИЙ
 // ============================================
 function processUpdate($update) {
@@ -265,6 +405,13 @@ function processUpdate($update) {
         $text = $message['text'] ?? '';
         $username = $message['from']['username'] ?? 'user';
         $user_id = registerUser($chat_id, $username);
+        
+        // ============================================
+        // 🔥 ОБНОВЛЕНИЕ СТРИКА ПРИ ЛЮБОМ ДЕЙСТВИИ
+        // ============================================
+        if ($user_id) {
+            updateStreak($chat_id, $user_id);
+        }
         
         // === МАССОВАЯ РАССЫЛКА ДЛЯ АДМИНА ===
         if (strpos($text, '/mail') === 0 && $chat_id == ADMIN_ID) {
@@ -336,6 +483,13 @@ function processUpdate($update) {
             sendMessage($chat_id, formatError("Сначала запусти бота командой /start"));
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
             return;
+        }
+        
+        // ============================================
+        // 🔥 ОБНОВЛЕНИЕ СТРИКА ПРИ ЛЮБОМ CALLBACK
+        // ============================================
+        if ($user_id) {
+            updateStreak($chat_id, $user_id);
         }
         
         // === ПОДМЕНЮ "ИГРЫ" ===
@@ -599,14 +753,17 @@ function showMainStats($chat_id, $user_id) {
     
     checkMilestones();
     
-    $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT balance, daily_streak FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
-    $balance = $stmt->fetchColumn();
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    $balance = $user['balance'] ?? 0;
+    $streak = $user['daily_streak'] ?? 0;
     
     $text = "🏠 <b>ARTAWORK</b>\n";
     $text .= decorativeDivider();
     $text .= "💰 Твой баланс: <b>" . formatRub($balance) . "</b>\n";
-    $text .= "💶 ≈ " . rubToEur($balance) . " €\n\n";
+    $text .= "💶 ≈ " . rubToEur($balance) . " €\n";
+    $text .= "🔥 Стрик: <b>" . $streak . "</b> дней\n\n";
     
     $text .= "🔥 <b>СТАТУС ВЫВОДОВ</b>\n";
     $text .= decorativeDivider();
@@ -623,7 +780,8 @@ function showMainStats($chat_id, $user_id) {
         $text .= "1. 📋 Выполняй задания — зарабатывай!\n";
         $text .= "2. 👥 Приглашай друзей — получай бонусы!\n";
         $text .= "3. 🎁 Забирай ежедневный бонус 50 ₽!\n";
-        $text .= "4. 🚀 Следи за ростом платформы!\n\n";
+        $text .= "4. 🔥 Заходи каждый день — получай бонусы за стрик!\n";
+        $text .= "5. 🚀 Следи за ростом платформы!\n\n";
     }
     
     $text .= "📈 <a href='https://artawork.ru'>👉 artawork.ru</a>";
@@ -720,9 +878,11 @@ function showGamesMenu($chat_id, $user_id) {
 function showProfileMenu($chat_id, $user_id) {
     global $pdo;
     
-    $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT balance, daily_streak FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
-    $balance = $stmt->fetchColumn();
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    $balance = $user['balance'] ?? 0;
+    $streak = $user['daily_streak'] ?? 0;
     
     $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
     $target = 2000;
@@ -730,7 +890,8 @@ function showProfileMenu($chat_id, $user_id) {
     $text = "👤 <b>ТВОЙ ПРОФИЛЬ</b>\n";
     $text .= decorativeDivider();
     $text .= "💰 Баланс: <b>" . formatRub($balance) . "</b>\n";
-    $text .= "💶 ≈ " . rubToEur($balance) . " €\n\n";
+    $text .= "💶 ≈ " . rubToEur($balance) . " €\n";
+    $text .= "🔥 Стрик: <b>" . $streak . "</b> дней\n\n";
     $text .= "👥 Всего пользователей: <b>" . number_format($total_users, 0, '.', ' ') . "</b>\n";
     $text .= "🎯 До открытия выводов: <b>" . number_format($target, 0, '.', ' ') . "</b>\n";
     
@@ -753,9 +914,11 @@ function showBalance($chat_id, $user_id) {
     
     checkAndCompleteQuest($user_id, 'check_balance');
     
-    $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT balance, daily_streak FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
-    $balance = $stmt->fetchColumn();
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    $balance = $user['balance'] ?? 0;
+    $streak = $user['daily_streak'] ?? 0;
     
     $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
     $target = 2000;
@@ -763,7 +926,8 @@ function showBalance($chat_id, $user_id) {
     $text = "💰 <b>ТВОЙ БАЛАНС</b>\n";
     $text .= decorativeDivider();
     $text .= "💵 <b>" . formatRub($balance) . "</b>\n";
-    $text .= "💶 ≈ " . rubToEur($balance) . " €\n\n";
+    $text .= "💶 ≈ " . rubToEur($balance) . " €\n";
+    $text .= "🔥 Стрик: <b>" . $streak . "</b> дней\n\n";
     $text .= "👥 Всего пользователей: <b>" . number_format($total_users, 0, '.', ' ') . "</b>\n";
     
     if ($total_users >= $target) {
@@ -1498,82 +1662,53 @@ function showReferrals($chat_id, $user_id) {
 }
 
 // ============================================
-// 16. 🔥 СТРИК
+// 16. 🔥 СТРИК (ОБНОВЛЕННЫЙ)
 // ============================================
 function handleStreak($chat_id, $user_id) {
     global $pdo;
     
     checkAndCompleteQuest($user_id, 'check_streak');
     
+    // Принудительно обновляем стрик
     updateStreak($chat_id, $user_id);
     
     $stmt = $pdo->prepare("SELECT daily_streak FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $streak = $stmt->fetchColumn() ?: 0;
     
+    $next_bonus = getStreakBonus($streak + 1);
+    $current_bonus = getStreakBonus($streak);
+    
     $text = "🔥 <b>ЕЖЕДНЕВНЫЙ СТРИК</b>\n";
     $text .= decorativeDivider();
-    $text .= "📊 Текущий стрик: <b>" . $streak . "</b> дней\n\n";
-    $text .= "📋 <b>Награды:</b>\n";
-    $text .= "• День 1: " . formatRub(STREAK_BONUS_1) . "\n";
-    $text .= "• День 7: " . formatRub(STREAK_BONUS_7) . "\n";
-    $text .= "• День 30: " . formatRub(STREAK_BONUS_30) . "\n\n";
-    $text .= "💡 Заходи каждый день, чтобы увеличивать стрик и получать бонусы!";
+    $text .= "📊 Текущий стрик: <b>" . $streak . "</b> дней\n";
+    $text .= "💰 Бонус за сегодня: <b>" . formatRub($current_bonus) . "</b>\n\n";
     
-    sendMessage($chat_id, $text, mainKeyboard());
-}
-
-function updateStreak($chat_id, $user_id) {
-    global $pdo;
+    // Показываем прогресс до следующего бонуса
+    $text .= "🎯 <b>Следующие бонусы:</b>\n";
     
-    $stmt = $pdo->prepare("SELECT daily_streak, last_streak_date, vacation_used_at FROM users WHERE id = ?");
-    $stmt->execute([$user_id]);
-    $user = $stmt->fetch();
-    
-    $today = date('Y-m-d');
-    $last_date = $user['last_streak_date'];
-    $streak = $user['daily_streak'] ?: 0;
-    $vacation_date = $user['vacation_used_at'] ?? null;
-    
-    $yesterday = date('Y-m-d', strtotime('-1 day'));
-    $is_vacation_yesterday = ($vacation_date && $vacation_date == $yesterday);
-    
-    if (!$last_date || $last_date == $today) {
-        return;
-    }
-    
-    if ($is_vacation_yesterday) {
-        $stmt = $pdo->prepare("UPDATE users SET last_streak_date = ? WHERE id = ?");
-        $stmt->execute([$today, $user_id]);
-        return;
-    }
-    
-    if ($last_date == $yesterday) {
-        $streak++;
-    } else {
-        $streak = 1;
-    }
-    
-    $bonus = 0;
-    if ($streak == 1) $bonus = STREAK_BONUS_1;
-    elseif ($streak == 7) $bonus = STREAK_BONUS_7;
-    elseif ($streak == 30) $bonus = STREAK_BONUS_30;
-    
-    $stmt = $pdo->prepare("UPDATE users SET daily_streak = ?, last_streak_date = ? WHERE id = ?");
-    $stmt->execute([$streak, $today, $user_id]);
-    
-    if ($bonus > 0) {
-        $stmt = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
-        $stmt->execute([$bonus, $user_id]);
-        
-        $desc = 'Бонус стрика (день ' . $streak . ')';
-        $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'streak_bonus', ?, NOW())");
-        $stmt->execute([$user_id, $bonus, $desc]);
-        
-        if ($chat_id) {
-            sendMessage($chat_id, "🔥 <b>Бонус стрика!</b>\n\nДень " . $streak . " подряд!\n💰 Начислено: <b>" . formatRub($bonus) . "</b>");
+    // Показываем ближайшие 5 ключевых дней
+    $key_days = [1, 3, 5, 7, 10, 14, 21, 30, 60, 90, 180, 365];
+    $shown = 0;
+    foreach ($key_days as $day) {
+        if ($day > $streak && $shown < 5) {
+            $text .= "• День <b>" . $day . "</b> → <b>" . formatRub(getStreakBonus($day)) . "</b>\n";
+            $shown++;
         }
     }
+    
+    if ($shown == 0) {
+        $text .= "🎉 Ты достиг максимальных бонусов!\n";
+    }
+    
+    $text .= "\n💡 <b>Как работает стрик:</b>\n";
+    $text .= "• Заходи каждый день\n";
+    $text .= "• Стрик растёт автоматически\n";
+    $text .= "• Чем длиннее стрик — тем больше бонус!\n";
+    $text .= "• Пропуск дня сбрасывает стрик на 1\n";
+    $text .= "• Отпуск сохраняет стрик (1 раз в 14 дней)";
+    
+    sendMessage($chat_id, $text, mainKeyboard());
 }
 
 // ============================================
@@ -1684,7 +1819,18 @@ function handleTop($chat_id, $user_id) {
         $i++;
     }
     
-    $text .= "\n📊 Обновляется еженедельно!";
+    $text .= "\n🔥 <b>Топ по стрику:</b>\n";
+    $stmt = $pdo->prepare("SELECT username, daily_streak FROM users WHERE daily_streak > 0 ORDER BY daily_streak DESC LIMIT 10");
+    $stmt->execute();
+    $top_streak = $stmt->fetchAll();
+    
+    $i = 1;
+    foreach ($top_streak as $t) {
+        $text .= $i . ". @" . $t['username'] . " — " . $t['daily_streak'] . " дней\n";
+        $i++;
+    }
+    
+    $text .= "\n📊 Обновляется ежедневно!";
     
     sendMessage($chat_id, $text, mainKeyboard());
 }
@@ -2318,7 +2464,8 @@ function showProfile($chat_id, $user_id) {
     $text .= decorativeDivider();
     $text .= $rank['icon'] . " <b>" . $rank['name'] . "</b>\n";
     $text .= "👥 Реферальный процент: <b>" . $ref_percent . "%</b>\n";
-    $text .= "🔑 Ключей для кейсов: <b>" . $keys . "</b>\n\n";
+    $text .= "🔑 Ключей для кейсов: <b>" . $keys . "</b>\n";
+    $text .= "🔥 Стрик: <b>" . ($user['daily_streak'] ?? 0) . "</b> дней\n\n";
     $text .= "🆔 ID: " . $user['id'] . "\n";
     $text .= "👤 Username: @" . $user['username'] . "\n";
     $text .= "💰 Баланс: <b>" . formatRub($user['balance']) . "</b>\n";
@@ -2360,6 +2507,9 @@ function showHelp($chat_id) {
     $text .= "За задания получай ключи и открывай кейсы с наградами!\n\n";
     $text .= "📨 <b>Переводы:</b>\n";
     $text .= "Создай пригласительный перевод и перешли его другу!\n\n";
+    $text .= "🔥 <b>Стрик:</b>\n";
+    $text .= "Заходи каждый день и получай бонусы!\n";
+    $text .= "Чем длиннее стрик — тем больше награда!\n\n";
     $text .= "📧 По всем вопросам: @artawork_support";
     
     sendMessage($chat_id, $text, mainKeyboard());
