@@ -2,56 +2,259 @@
 require_once 'config.php';
 
 // ============================================
-// ГЛАВНОЕ МЕНЮ (4 КНОПКИ + БОНУС)
+// 🟣 ФИОЛЕТОВЫЙ СТИЛЬ КНОПОК
+// ============================================
+
+/**
+ * Стилизованные кнопки с фиолетовым оформлением
+ * Используются декоративные эмодзи для красоты
+ */
+function styleButton($text, $emoji = '') {
+    return ['text' => ($emoji ? $emoji . ' ' : '') . $text];
+}
+
+function styleInlineButton($text, $callback, $emoji = '') {
+    return ['text' => ($emoji ? $emoji . ' ' : '') . $text, 'callback_data' => $callback];
+}
+
+// ============================================
+// 🌟 ГЛАВНОЕ МЕНЮ (СТИЛИЗОВАННОЕ)
 // ============================================
 function mainKeyboard() {
     return [
         'keyboard' => [
-            [['text' => '📋 Задания'], ['text' => '🎮 Игры']],
-            [['text' => '👤 Профиль'], ['text' => '❓ Помощь']],
-            [['text' => '🎁 Бонус дня']]
+            [
+                ['text' => '📋 ЗАДАНИЯ'],
+                ['text' => '🎮 ИГРЫ']
+            ],
+            [
+                ['text' => '👤 ПРОФИЛЬ'],
+                ['text' => '❓ ПОМОЩЬ']
+            ],
+            [
+                ['text' => '🎁 БОНУС ДНЯ']
+            ]
         ],
         'resize_keyboard' => true,
-        'one_time_keyboard' => false
+        'one_time_keyboard' => false,
+        'input_field_placeholder' => '✨ Выберите действие...'
     ];
 }
 
 // ============================================
-// ПОДМЕНЮ "ИГРЫ"
+// 🎮 ПОДМЕНЮ "ИГРЫ" (ФИОЛЕТОВЫЙ СТИЛЬ)
 // ============================================
 function gamesKeyboard() {
     return [
         'inline_keyboard' => [
-            [['text' => '🏖️ Отпуск', 'callback_data' => 'game_vacation']],
-            [['text' => '⚔️ Дуэли', 'callback_data' => 'game_duels']],
-            [['text' => '🎲 Кейсы', 'callback_data' => 'game_cases']],
-            [['text' => '🏆 Топ', 'callback_data' => 'game_top']],
-            [['text' => '🔥 Стрик', 'callback_data' => 'game_streak']],
-            [['text' => '🎯 Квесты', 'callback_data' => 'game_quests']],
-            [['text' => '🔙 Назад', 'callback_data' => 'game_back']]
+            [
+                ['text' => '🏖️ Отпуск', 'callback_data' => 'game_vacation'],
+                ['text' => '⚔️ Дуэли', 'callback_data' => 'game_duels']
+            ],
+            [
+                ['text' => '🎲 Кейсы', 'callback_data' => 'game_cases'],
+                ['text' => '🏆 Топ', 'callback_data' => 'game_top']
+            ],
+            [
+                ['text' => '🔥 Стрик', 'callback_data' => 'game_streak'],
+                ['text' => '🎯 Квесты', 'callback_data' => 'game_quests']
+            ],
+            [
+                ['text' => '🔙 Назад', 'callback_data' => 'game_back']
+            ]
         ]
     ];
 }
 
 // ============================================
-// ПОДМЕНЮ "ПРОФИЛЬ"
+// 👤 ПОДМЕНЮ "ПРОФИЛЬ" (ФИОЛЕТОВЫЙ СТИЛЬ)
 // ============================================
 function profileKeyboard() {
     return [
         'inline_keyboard' => [
-            [['text' => '💰 Баланс', 'callback_data' => 'profile_balance']],
-            [['text' => '💳 Вывод', 'callback_data' => 'profile_withdraw']],
-            [['text' => '👥 Рефералы', 'callback_data' => 'profile_refs']],
-            [['text' => '📊 Мои выводы', 'callback_data' => 'profile_withdraws']],
-            [['text' => '📨 Перевод', 'callback_data' => 'profile_transfer']],
-            [['text' => '📊 Статистика', 'callback_data' => 'profile_stats']],
-            [['text' => '🔙 Назад', 'callback_data' => 'profile_back']]
+            [
+                ['text' => '💰 Баланс', 'callback_data' => 'profile_balance'],
+                ['text' => '💳 Вывод', 'callback_data' => 'profile_withdraw']
+            ],
+            [
+                ['text' => '👥 Рефералы', 'callback_data' => 'profile_refs'],
+                ['text' => '📊 Мои выводы', 'callback_data' => 'profile_withdraws']
+            ],
+            [
+                ['text' => '📨 Перевод', 'callback_data' => 'profile_transfer'],
+                ['text' => '📊 Статистика', 'callback_data' => 'profile_stats']
+            ],
+            [
+                ['text' => '🔙 Назад', 'callback_data' => 'profile_back']
+            ]
         ]
     ];
 }
 
 // ============================================
-// ОБРАБОТКА ВХОДЯЩИХ ОБНОВЛЕНИЙ
+// 💰 МЕНЮ ВЫВОДА (ФИОЛЕТОВЫЙ СТИЛЬ)
+// ============================================
+function withdrawKeyboard() {
+    return [
+        'inline_keyboard' => [
+            [
+                ['text' => '💎 Криптокошелёк', 'callback_data' => 'withdraw_crypto'],
+                ['text' => '🏦 Банковский счёт', 'callback_data' => 'withdraw_bank']
+            ],
+            [
+                ['text' => '❌ Отмена', 'callback_data' => 'withdraw_cancel']
+            ]
+        ]
+    ];
+}
+
+// ============================================
+// 🎲 МЕНЮ КЕЙСОВ (ФИОЛЕТОВЫЙ СТИЛЬ)
+// ============================================
+function casesKeyboard() {
+    return [
+        'inline_keyboard' => [
+            [
+                ['text' => '🔄 Обновить', 'callback_data' => 'cases_refresh']
+            ]
+        ]
+    ];
+}
+
+// ============================================
+// ⚔️ МЕНЮ ДУЭЛЕЙ (ФИОЛЕТОВЫЙ СТИЛЬ)
+// ============================================
+function duelKeyboard() {
+    return [
+        'inline_keyboard' => [
+            [
+                ['text' => '100 ₽', 'callback_data' => 'duel_bet_100'],
+                ['text' => '500 ₽', 'callback_data' => 'duel_bet_500'],
+                ['text' => '1000 ₽', 'callback_data' => 'duel_bet_1000'],
+                ['text' => '5000 ₽', 'callback_data' => 'duel_bet_5000']
+            ],
+            [
+                ['text' => '🔄 Обновить', 'callback_data' => 'duel_refresh']
+            ]
+        ]
+    ];
+}
+
+// ============================================
+// 📨 МЕНЮ ПЕРЕВОДОВ (ФИОЛЕТОВЫЙ СТИЛЬ)
+// ============================================
+function transferKeyboard() {
+    return [
+        'inline_keyboard' => [
+            [
+                ['text' => '100 ₽', 'callback_data' => 'invite_amount_100'],
+                ['text' => '200 ₽', 'callback_data' => 'invite_amount_200'],
+                ['text' => '500 ₽', 'callback_data' => 'invite_amount_500'],
+                ['text' => '1000 ₽', 'callback_data' => 'invite_amount_1000']
+            ],
+            [
+                ['text' => '❌ Отмена', 'callback_data' => 'withdraw_cancel']
+            ]
+        ]
+    ];
+}
+
+// ============================================
+// 🏖️ МЕНЮ ОТПУСКА (ФИОЛЕТОВЫЙ СТИЛЬ)
+// ============================================
+function vacationKeyboard() {
+    return [
+        'inline_keyboard' => [
+            [
+                ['text' => '✅ Да, подтверждаю', 'callback_data' => 'vacation_confirm'],
+                ['text' => '❌ Нет, отмена', 'callback_data' => 'vacation_cancel']
+            ]
+        ]
+    ];
+}
+
+// ============================================
+// 📋 МЕНЮ ЗАДАНИЙ (ФИОЛЕТОВЫЙ СТИЛЬ)
+// ============================================
+function tasksKeyboard($tasks) {
+    $keyboard = ['inline_keyboard' => []];
+    foreach ($tasks as $task) {
+        $keyboard['inline_keyboard'][] = [
+            ['text' => '📌 ' . $task['title'] . ' — ' . formatRub($task['reward']), 'callback_data' => 'task_detail_' . $task['id']]
+        ];
+    }
+    $keyboard['inline_keyboard'][] = [
+        ['text' => '🔄 Обновить список', 'callback_data' => 'refresh_tasks']
+    ];
+    return $keyboard;
+}
+
+// ============================================
+// 📌 ДЕТАЛЬНОЕ МЕНЮ ЗАДАНИЯ (ФИОЛЕТОВЫЙ СТИЛЬ)
+// ============================================
+function taskDetailKeyboard($task_id) {
+    return [
+        'inline_keyboard' => [
+            [
+                ['text' => '✅ Выполнил задание', 'callback_data' => 'task_do_' . $task_id]
+            ],
+            [
+                ['text' => '🔙 Назад к списку', 'callback_data' => 'refresh_tasks']
+            ]
+        ]
+    ];
+}
+
+// ============================================
+// 📨 МЕНЮ РАССЫЛКИ (ФИОЛЕТОВЫЙ СТИЛЬ)
+// ============================================
+function mailingKeyboard() {
+    return [
+        'inline_keyboard' => [
+            [
+                ['text' => '✅ Да, отправить всем', 'callback_data' => 'mailing_confirm'],
+                ['text' => '❌ Отмена', 'callback_data' => 'mailing_cancel']
+            ]
+        ]
+    ];
+}
+
+// ============================================
+// 🟣 ДЕКОРАТИВНЫЕ РАЗДЕЛИТЕЛИ
+// ============================================
+function decorativeDivider() {
+    return "━━━━━━━━━━━━━━━━━━━\n";
+}
+
+function decorativeTitle($emoji, $text) {
+    return $emoji . " <b>" . $text . "</b>\n" . decorativeDivider();
+}
+
+// ============================================
+// 🌟 ФОРМАТИРОВАНИЕ ТЕКСТА
+// ============================================
+function formatText($text, $bold = false) {
+    return $bold ? "<b>" . $text . "</b>" : $text;
+}
+
+function formatSuccess($text) {
+    return "✅ " . $text;
+}
+
+function formatError($text) {
+    return "❌ " . $text;
+}
+
+function formatWarning($text) {
+    return "⚠️ " . $text;
+}
+
+function formatInfo($text) {
+    return "ℹ️ " . $text;
+}
+
+// ============================================
+// 🔄 ОБРАБОТКА ВХОДЯЩИХ ОБНОВЛЕНИЙ
 // ============================================
 function processUpdate($update) {
     global $pdo;
@@ -76,30 +279,30 @@ function processUpdate($update) {
         }
         
         // === ГЛАВНОЕ МЕНЮ ===
-        if ($text == '📋 Задания') {
+        if ($text == '📋 ЗАДАНИЯ' || $text == '📋 Задания') {
             checkAndCompleteQuest($user_id, 'first_step');
             showTasks($chat_id, $user_id);
             return;
         }
         
-        if ($text == '🎮 Игры') {
+        if ($text == '🎮 ИГРЫ' || $text == '🎮 Игры') {
             showGamesMenu($chat_id, $user_id);
             return;
         }
         
-        if ($text == '👤 Профиль') {
+        if ($text == '👤 ПРОФИЛЬ' || $text == '👤 Профиль') {
             showProfileMenu($chat_id, $user_id);
             return;
         }
         
-        if ($text == '❓ Помощь') {
+        if ($text == '❓ ПОМОЩЬ' || $text == '❓ Помощь') {
             checkAndCompleteQuest($user_id, 'ask_help');
             showHelp($chat_id);
             return;
         }
         
         // === ЕЖЕДНЕВНЫЙ БОНУС ===
-        if ($text == '🎁 Бонус дня') {
+        if ($text == '🎁 БОНУС ДНЯ' || $text == '🎁 Бонус дня') {
             checkAndCompleteQuest($user_id, 'take_bonus');
             handleDailyBonus($chat_id, $user_id);
             return;
@@ -116,7 +319,7 @@ function processUpdate($update) {
     }
     
     // ============================================
-    // ОБРАБОТКА CALLBACK
+    // 🔄 ОБРАБОТКА CALLBACK
     // ============================================
     if (isset($update['callback_query'])) {
         $callback = $update['callback_query'];
@@ -130,7 +333,7 @@ function processUpdate($update) {
         $user_id = $stmt->fetchColumn();
         
         if (!$user_id) {
-            sendMessage($chat_id, "❌ Сначала запусти бота командой /start");
+            sendMessage($chat_id, formatError("Сначала запусти бота командой /start"));
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
             return;
         }
@@ -218,7 +421,7 @@ function processUpdate($update) {
             return;
         }
         if ($data == 'mailing_cancel') {
-            sendMessage($chat_id, "❌ Рассылка отменена.", mainKeyboard());
+            sendMessage($chat_id, formatError("Рассылка отменена."), mainKeyboard());
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
             unset($GLOBALS['pending_mailing']);
             return;
@@ -251,7 +454,7 @@ function processUpdate($update) {
             return;
         }
         if ($data == 'withdraw_cancel') {
-            sendMessage($chat_id, "❌ Вывод отменён.", mainKeyboard());
+            sendMessage($chat_id, formatError("Вывод отменён."), mainKeyboard());
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
             return;
         }
@@ -291,7 +494,7 @@ function processUpdate($update) {
             return;
         }
         if ($data == 'vacation_cancel') {
-            sendMessage($chat_id, "❌ Отпуск отменён.", mainKeyboard());
+            sendMessage($chat_id, formatError("Отпуск отменён."), mainKeyboard());
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback['id']]);
             return;
         }
@@ -310,7 +513,7 @@ function processUpdate($update) {
 }
 
 // ============================================
-// 1. ОБРАБОТКА /START
+// 1. 🚀 ОБРАБОТКА /START
 // ============================================
 function handleStart($chat_id, $user_id, $text) {
     global $pdo;
@@ -344,7 +547,7 @@ function handleStart($chat_id, $user_id, $text) {
 }
 
 // ============================================
-// 2. СТАТИСТИКА ПЛАТФОРМЫ (НОВАЯ ФУНКЦИЯ)
+// 2. 📊 СТАТИСТИКА ПЛАТФОРМЫ
 // ============================================
 function showPlatformStats($chat_id, $user_id) {
     global $pdo;
@@ -357,13 +560,15 @@ function showPlatformStats($chat_id, $user_id) {
     $remaining = $target - $total_users;
     $progress = min(($total_users / $target) * 100, 100);
     
-    $text = "📊 <b>Статистика платформы</b>\n\n";
+    $text = "📊 <b>СТАТИСТИКА ПЛАТФОРМЫ</b>\n";
+    $text .= decorativeDivider();
     $text .= "👥 Всего пользователей: <b>" . number_format($total_users, 0, '.', ' ') . "</b>\n";
     $text .= "📋 Выполнено заданий: <b>" . number_format($total_tasks, 0, '.', ' ') . "</b>\n";
     $text .= "💰 Общий баланс: <b>" . formatRub($total_balance) . "</b>\n";
     $text .= "💳 Выведено всего: <b>" . formatRub($total_withdraws) . "</b>\n\n";
     
-    $text .= "🔥 <b>Статус выводов:</b>\n";
+    $text .= "🔥 <b>СТАТУС ВЫВОДОВ</b>\n";
+    $text .= decorativeDivider();
     $text .= "🎯 Цель: <b>" . number_format($target, 0, '.', ' ') . " пользователей</b>\n";
     $text .= buildProgressBar($progress, 20) . " <b>" . round($progress) . "%</b>\n";
     $text .= "👥 " . number_format($total_users, 0, '.', ' ') . " / " . number_format($target, 0, '.', ' ') . "\n";
@@ -382,7 +587,7 @@ function showPlatformStats($chat_id, $user_id) {
 }
 
 // ============================================
-// 3. ГЛАВНАЯ СТАТИСТИКА (УЛУЧШЕНА)
+// 3. 🏠 ГЛАВНАЯ СТАТИСТИКА
 // ============================================
 function showMainStats($chat_id, $user_id) {
     global $pdo;
@@ -398,11 +603,13 @@ function showMainStats($chat_id, $user_id) {
     $stmt->execute([$user_id]);
     $balance = $stmt->fetchColumn();
     
-    $text = "🏠 <b>ArtaWork</b>\n\n";
+    $text = "🏠 <b>ARTAWORK</b>\n";
+    $text .= decorativeDivider();
     $text .= "💰 Твой баланс: <b>" . formatRub($balance) . "</b>\n";
     $text .= "💶 ≈ " . rubToEur($balance) . " €\n\n";
     
-    $text .= "🔥 <b>Статус выводов:</b>\n";
+    $text .= "🔥 <b>СТАТУС ВЫВОДОВ</b>\n";
+    $text .= decorativeDivider();
     $text .= buildProgressBar($progress, 15) . " " . round($progress) . "%\n";
     $text .= "👥 " . number_format($total_users, 0, '.', ' ') . " / " . number_format($target, 0, '.', ' ') . "\n";
     
@@ -425,7 +632,7 @@ function showMainStats($chat_id, $user_id) {
 }
 
 // ============================================
-// 4. ПРОГРЕСС-БАР
+// 4. 📊 ПРОГРЕСС-БАР
 // ============================================
 function buildProgressBar($percent, $length = 20) {
     $filled = round(($percent / 100) * $length);
@@ -435,7 +642,7 @@ function buildProgressBar($percent, $length = 20) {
 }
 
 // ============================================
-// 5. ПРОВЕРКА РУБЕЖЕЙ (2000)
+// 5. 🎯 ПРОВЕРКА РУБЕЖЕЙ
 // ============================================
 function checkMilestones() {
     global $pdo;
@@ -469,7 +676,8 @@ function sendMilestoneNotification($count) {
     
     $target = 2000;
     $remaining = $target - $count;
-    $text = "🎉 <b>НОВЫЙ РУБЕЖ!</b>\n\n";
+    $text = "🎉 <b>НОВЫЙ РУБЕЖ!</b>\n";
+    $text .= decorativeDivider();
     $text .= "👥 Нас уже <b>" . number_format($count, 0, '.', ' ') . "</b> человек!\n";
     
     if ($remaining > 0) {
@@ -492,10 +700,11 @@ function sendMilestoneNotification($count) {
 }
 
 // ============================================
-// 6. ПОКАЗАТЬ МЕНЮ ИГР
+// 6. 🎮 ПОКАЗАТЬ МЕНЮ ИГР
 // ============================================
 function showGamesMenu($chat_id, $user_id) {
-    $text = "🎮 <b>Игровой раздел</b>\n\n";
+    $text = "🎮 <b>ИГРОВОЙ РАЗДЕЛ</b>\n";
+    $text .= decorativeDivider();
     $text .= "Выбери игру или развлечение:\n";
     $text .= "💰 Все игры виртуальные — ты не проигрываешь реальные деньги!\n\n";
     $text .= "🔥 <b>Активные ивенты:</b>\n";
@@ -506,7 +715,7 @@ function showGamesMenu($chat_id, $user_id) {
 }
 
 // ============================================
-// 7. ПОКАЗАТЬ МЕНЮ ПРОФИЛЬ (УЛУЧШЕН)
+// 7. 👤 ПОКАЗАТЬ МЕНЮ ПРОФИЛЬ
 // ============================================
 function showProfileMenu($chat_id, $user_id) {
     global $pdo;
@@ -518,7 +727,8 @@ function showProfileMenu($chat_id, $user_id) {
     $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
     $target = 2000;
     
-    $text = "👤 <b>Твой профиль</b>\n\n";
+    $text = "👤 <b>ТВОЙ ПРОФИЛЬ</b>\n";
+    $text .= decorativeDivider();
     $text .= "💰 Баланс: <b>" . formatRub($balance) . "</b>\n";
     $text .= "💶 ≈ " . rubToEur($balance) . " €\n\n";
     $text .= "👥 Всего пользователей: <b>" . number_format($total_users, 0, '.', ' ') . "</b>\n";
@@ -536,7 +746,7 @@ function showProfileMenu($chat_id, $user_id) {
 }
 
 // ============================================
-// 8. ПОКАЗАТЬ БАЛАНС (УЛУЧШЕН)
+// 8. 💰 ПОКАЗАТЬ БАЛАНС
 // ============================================
 function showBalance($chat_id, $user_id) {
     global $pdo;
@@ -550,7 +760,8 @@ function showBalance($chat_id, $user_id) {
     $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
     $target = 2000;
     
-    $text = "💰 <b>Твой баланс</b>\n\n";
+    $text = "💰 <b>ТВОЙ БАЛАНС</b>\n";
+    $text .= decorativeDivider();
     $text .= "💵 <b>" . formatRub($balance) . "</b>\n";
     $text .= "💶 ≈ " . rubToEur($balance) . " €\n\n";
     $text .= "👥 Всего пользователей: <b>" . number_format($total_users, 0, '.', ' ') . "</b>\n";
@@ -565,14 +776,12 @@ function showBalance($chat_id, $user_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
-
 // ============================================
-// 9. ЕЖЕДНЕВНЫЙ БОНУС 50 ₽ (ИСПРАВЛЕН)
+// 9. 🎁 ЕЖЕДНЕВНЫЙ БОНУС
 // ============================================
 function handleDailyBonus($chat_id, $user_id) {
     global $pdo;
     
-    // Проверяем, получал ли бонус сегодня (используем bonus_date, а не created_at)
     $stmt = $pdo->prepare("SELECT * FROM daily_bonuses WHERE user_id = ? AND bonus_date = CURDATE()");
     $stmt->execute([$user_id]);
     $today = $stmt->fetch();
@@ -582,7 +791,8 @@ function handleDailyBonus($chat_id, $user_id) {
         $stmt->execute([$user_id]);
         $total_days = $stmt->fetchColumn();
         
-        $text = "🎁 <b>Ты уже получал бонус сегодня!</b>\n\n";
+        $text = "🎁 <b>Ты уже получал бонус сегодня!</b>\n";
+        $text .= decorativeDivider();
         $text .= "📊 Твой стрик: <b>{$total_days} дней</b>\n";
         $text .= "💰 Завтра получишь ещё 50 ₽!\n\n";
         $text .= "⏳ До следующего бонуса: <b>" . getTimeUntilMidnight() . "</b>";
@@ -606,7 +816,8 @@ function handleDailyBonus($chat_id, $user_id) {
     $remaining = $target - $total_users;
     $progress = min(($total_users / $target) * 100, 100);
     
-    $text = "🎁 <b>Ежедневный бонус получен!</b>\n\n";
+    $text = "🎁 <b>ЕЖЕДНЕВНЫЙ БОНУС ПОЛУЧЕН!</b>\n";
+    $text .= decorativeDivider();
     $text .= "💰 Начислено: <b>50 ₽</b>\n";
     $text .= "📊 Твой стрик: <b>{$total_days} дней</b>\n\n";
     $text .= "🔥 <b>Скоро будет ещё круче!</b>\n";
@@ -630,8 +841,9 @@ function getTimeUntilMidnight() {
     $minutes = floor(($diff % 3600) / 60);
     return "{$hours} ч {$minutes} мин";
 }
+
 // ============================================
-// 10. ВЫВОД СРЕДСТВ (УЛУЧШЕН)
+// 10. 💳 ВЫВОД СРЕДСТВ
 // ============================================
 function showWithdrawMenu($chat_id, $user_id) {
     global $pdo;
@@ -640,7 +852,7 @@ function showWithdrawMenu($chat_id, $user_id) {
     $target = 2000;
     
     if (hasActiveWithdraw($user_id)) {
-        sendMessage($chat_id, "⚠️ У тебя уже есть активная заявка на вывод!", mainKeyboard());
+        sendMessage($chat_id, formatWarning("У тебя уже есть активная заявка на вывод!"), mainKeyboard());
         return;
     }
     
@@ -649,11 +861,12 @@ function showWithdrawMenu($chat_id, $user_id) {
     $balance = $stmt->fetchColumn();
     
     if ($balance < MIN_WITHDRAW_RUB) {
-        sendMessage($chat_id, "❌ Минимальная сумма для вывода: " . formatRub(MIN_WITHDRAW_RUB) . "\n\nТвой баланс: " . formatRub($balance), mainKeyboard());
+        sendMessage($chat_id, formatError("Минимальная сумма для вывода: " . formatRub(MIN_WITHDRAW_RUB) . "\n\nТвой баланс: " . formatRub($balance)), mainKeyboard());
         return;
     }
     
-    $text = "💳 <b>Вывод средств</b>\n\n";
+    $text = "💳 <b>ВЫВОД СРЕДСТВ</b>\n";
+    $text .= decorativeDivider();
     $text .= "💰 Твой баланс: <b>" . formatRub($balance) . "</b>\n";
     $text .= "💶 ≈ " . rubToEur($balance) . " €\n";
     $text .= "👥 Всего пользователей: <b>" . number_format($total_users, 0, '.', ' ') . "</b>\n\n";
@@ -668,14 +881,7 @@ function showWithdrawMenu($chat_id, $user_id) {
         $text .= "• 💎 USDT TRC20 (мин. " . formatRub(MIN_WITHDRAW_RUB) . ")\n";
         $text .= "• 💳 Банковская карта (мин. " . formatRub(MIN_WITHDRAW_RUB) . ")";
         
-        $inlineKeyboard = [
-            'inline_keyboard' => [
-                [['text' => '💎 Криптокошелёк', 'callback_data' => 'withdraw_crypto']],
-                [['text' => '🏦 Банковский счёт', 'callback_data' => 'withdraw_bank']],
-                [['text' => '❌ Отмена', 'callback_data' => 'withdraw_cancel']]
-            ]
-        ];
-        sendMessage($chat_id, $text, $inlineKeyboard);
+        sendMessage($chat_id, $text, withdrawKeyboard());
     } else {
         $remaining = $target - $total_users;
         $progress = min(($total_users / $target) * 100, 100);
@@ -705,7 +911,7 @@ function showWithdrawMenu($chat_id, $user_id) {
 }
 
 // ============================================
-// 11. ОБРАБОТКА РАССЫЛКИ (АДМИН)
+// 11. 📨 ОБРАБОТКА РАССЫЛКИ (АДМИН)
 // ============================================
 function handleAdminMail($chat_id, $text) {
     global $pdo;
@@ -713,7 +919,7 @@ function handleAdminMail($chat_id, $text) {
     $mail_text = trim(substr($text, 5));
     
     if (empty($mail_text)) {
-        sendMessage($chat_id, "❌ <b>Укажите текст для рассылки!</b>\n\nПример:\n<code>/mail Привет всем! 🚀</code>", mainKeyboard());
+        sendMessage($chat_id, formatError("<b>Укажите текст для рассылки!</b>\n\nПример:\n<code>/mail Привет всем! 🚀</code>"), mainKeyboard());
         return;
     }
     
@@ -735,20 +941,21 @@ function handleAdminMail($chat_id, $text) {
     $total_users = $stmt->fetchColumn();
     
     if ($total_users == 0) {
-        sendMessage($chat_id, "❌ Нет пользователей для рассылки!", mainKeyboard());
+        sendMessage($chat_id, formatError("Нет пользователей для рассылки!"), mainKeyboard());
         return;
     }
     
     $type_label = $message_type == 'all' ? 'ВСЕМ' : ($message_type == 'active' ? 'АКТИВНЫМ (≥5 заданий)' : 'НОВЫМ (≥1 задание)');
     
-    $confirm_text = "📨 <b>Массовая рассылка</b>\n\n";
+    $confirm_text = "📨 <b>МАССОВАЯ РАССЫЛКА</b>\n";
+    $confirm_text .= decorativeDivider();
     $confirm_text .= "👥 Получатели: <b>{$type_label}</b>\n";
     $confirm_text .= "📊 Всего: <b>{$total_users}</b> пользователей\n\n";
     $confirm_text .= "📝 <b>Текст сообщения:</b>\n";
-    $confirm_text .= "━━━━━━━━━━━━━━━━━━━\n";
+    $confirm_text .= decorativeDivider();
     $confirm_text .= $mail_text . "\n";
-    $confirm_text .= "━━━━━━━━━━━━━━━━━━━\n\n";
-    $confirm_text .= "⚠️ <b>Отправить рассылку?</b>\n";
+    $confirm_text .= decorativeDivider();
+    $confirm_text .= "\n⚠️ <b>Отправить рассылку?</b>\n";
     $confirm_text .= "Нажмите кнопку ниже для подтверждения.";
     
     $GLOBALS['pending_mailing'] = [
@@ -758,21 +965,14 @@ function handleAdminMail($chat_id, $text) {
         'total' => $total_users
     ];
     
-    $inlineKeyboard = [
-        'inline_keyboard' => [
-            [['text' => '✅ Да, отправить всем', 'callback_data' => 'mailing_confirm']],
-            [['text' => '❌ Отмена', 'callback_data' => 'mailing_cancel']]
-        ]
-    ];
-    
-    sendMessage($chat_id, $confirm_text, $inlineKeyboard);
+    sendMessage($chat_id, $confirm_text, mailingKeyboard());
 }
 
 function handleMailConfirm($chat_id, $callback_id) {
     global $pdo;
     
     if ($chat_id != ADMIN_ID) {
-        sendMessage($chat_id, "❌ У вас нет прав для этой операции!", mainKeyboard());
+        sendMessage($chat_id, formatError("У вас нет прав для этой операции!"), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
@@ -780,7 +980,7 @@ function handleMailConfirm($chat_id, $callback_id) {
     $mail_data = $GLOBALS['pending_mailing'] ?? null;
     
     if (!$mail_data || $mail_data['chat_id'] != $chat_id) {
-        sendMessage($chat_id, "❌ Данные рассылки устарели. Отправьте команду заново.", mainKeyboard());
+        sendMessage($chat_id, formatError("Данные рассылки устарели. Отправьте команду заново."), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
@@ -817,7 +1017,8 @@ function handleMailConfirm($chat_id, $callback_id) {
         usleep(100000);
     }
     
-    $result_text = "📨 <b>Рассылка завершена!</b>\n\n";
+    $result_text = "📨 <b>РАССЫЛКА ЗАВЕРШЕНА!</b>\n";
+    $result_text .= decorativeDivider();
     $result_text .= "✅ Отправлено: <b>{$sent}</b>\n";
     $result_text .= "❌ Ошибок: <b>{$failed}</b>\n";
     
@@ -834,10 +1035,8 @@ function handleMailConfirm($chat_id, $callback_id) {
 }
 
 // ============================================
-// 12. ВСЕ СТАРЫЕ ФУНКЦИИ (ПОЛНОСТЬЮ СОХРАНЕНЫ)
+// 12. 🏖️ ОТПУСК
 // ============================================
-
-// ----- 12.1. ОТПУСК -----
 function handleVacation($chat_id, $user_id) {
     global $pdo;
     
@@ -855,19 +1054,13 @@ function handleVacation($chat_id, $user_id) {
     
     $tomorrow = date('d.m.Y', strtotime('+1 day'));
     
-    $text = "🏖️ <b>Подтверждение отпуска</b>\n\n";
+    $text = "🏖️ <b>ПОДТВЕРЖДЕНИЕ ОТПУСКА</b>\n";
+    $text .= decorativeDivider();
     $text .= "Ты собираешься взять отпуск на <b>$tomorrow</b>.\n";
     $text .= "Этот день не будет считаться пропущенным для стрика.\n\n";
     $text .= "❓ <b>Подтверждаешь?</b>";
     
-    $inlineKeyboard = [
-        'inline_keyboard' => [
-            [['text' => '✅ Да, подтверждаю', 'callback_data' => 'vacation_confirm']],
-            [['text' => '❌ Нет, отмена', 'callback_data' => 'vacation_cancel']]
-        ]
-    ];
-    
-    sendMessage($chat_id, $text, $inlineKeyboard);
+    sendMessage($chat_id, $text, vacationKeyboard());
 }
 
 function confirmVacation($chat_id, $user_id, $callback_id) {
@@ -878,7 +1071,7 @@ function confirmVacation($chat_id, $user_id, $callback_id) {
     $last_vacation = $stmt->fetchColumn();
     
     if ($last_vacation && strtotime($last_vacation) > strtotime('-14 days')) {
-        sendMessage($chat_id, "❌ Отпуск уже был использован недавно!", mainKeyboard());
+        sendMessage($chat_id, formatError("Отпуск уже был использован недавно!"), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
@@ -894,11 +1087,14 @@ function confirmVacation($chat_id, $user_id, $callback_id) {
     botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
 }
 
-// ----- 12.2. ПЕРЕВОДЫ (INVITE TRANSFER) -----
+// ============================================
+// 13. 📨 ПЕРЕВОДЫ (INVITE TRANSFER)
+// ============================================
 function handleTransfer($chat_id, $user_id) {
     global $pdo;
     
-    $text = "💸 <b>Перевод средств через пересылку</b>\n\n";
+    $text = "💸 <b>ПЕРЕВОД СРЕДСТВ ЧЕРЕЗ ПЕРЕСЫЛКУ</b>\n";
+    $text .= decorativeDivider();
     $text .= "💰 Твой баланс: " . formatRub(getUserBalance($user_id)) . "\n";
     $text .= "📊 Лимиты:\n";
     $text .= "• Переводов в день: " . INVITE_TRANSFER_DAILY_LIMIT . "\n";
@@ -909,38 +1105,19 @@ function handleTransfer($chat_id, $user_id) {
     $text .= "Он получит деньги после регистрации в боте!\n\n";
     $text .= "💰 Выбери сумму:";
     
-    $inlineKeyboard = [
-        'inline_keyboard' => [
-            [['text' => '100 ₽', 'callback_data' => 'invite_amount_100']],
-            [['text' => '200 ₽', 'callback_data' => 'invite_amount_200']],
-            [['text' => '500 ₽', 'callback_data' => 'invite_amount_500']],
-            [['text' => '1000 ₽', 'callback_data' => 'invite_amount_1000']],
-            [['text' => '❌ Отмена', 'callback_data' => 'withdraw_cancel']]
-        ]
-    ];
-    
-    sendMessage($chat_id, $text, $inlineKeyboard);
+    sendMessage($chat_id, $text, transferKeyboard());
 }
 
 function createInviteTransfer($chat_id, $user_id, $callback_id) {
     global $pdo;
     
-    $text = "📨 <b>Переслать деньги</b>\n\n";
+    $text = "📨 <b>ПЕРЕСЛАТЬ ДЕНЬГИ</b>\n";
+    $text .= decorativeDivider();
     $text .= "Ты можешь отправить деньги любому пользователю Telegram через пересылку сообщения.\n";
     $text .= "Если пользователь не зарегистрирован — он получит деньги после регистрации.\n\n";
     $text .= "💰 Выбери сумму перевода:";
     
-    $inlineKeyboard = [
-        'inline_keyboard' => [
-            [['text' => '100 ₽', 'callback_data' => 'invite_amount_100']],
-            [['text' => '200 ₽', 'callback_data' => 'invite_amount_200']],
-            [['text' => '500 ₽', 'callback_data' => 'invite_amount_500']],
-            [['text' => '1000 ₽', 'callback_data' => 'invite_amount_1000']],
-            [['text' => '❌ Отмена', 'callback_data' => 'withdraw_cancel']]
-        ]
-    ];
-    
-    sendMessage($chat_id, $text, $inlineKeyboard);
+    sendMessage($chat_id, $text, transferKeyboard());
     botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
 }
 
@@ -952,7 +1129,7 @@ function createInviteTransferWithAmount($chat_id, $user_id, $amount, $callback_i
     $today_count = $stmt->fetchColumn();
     
     if ($today_count >= INVITE_TRANSFER_DAILY_LIMIT) {
-        sendMessage($chat_id, "❌ Ты исчерпал лимит пригласительных переводов на сегодня (макс. " . INVITE_TRANSFER_DAILY_LIMIT . ")", mainKeyboard());
+        sendMessage($chat_id, formatError("Ты исчерпал лимит пригласительных переводов на сегодня (макс. " . INVITE_TRANSFER_DAILY_LIMIT . ")"), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
@@ -962,7 +1139,7 @@ function createInviteTransferWithAmount($chat_id, $user_id, $amount, $callback_i
     $total_with_fee = $amount + $fee;
     
     if ($balance < $total_with_fee) {
-        sendMessage($chat_id, "❌ Недостаточно средств!\n\n💰 Твой баланс: " . formatRub($balance) . "\n📊 Нужно: " . formatRub($total_with_fee) . " (включая комиссию)", mainKeyboard());
+        sendMessage($chat_id, formatError("Недостаточно средств!\n\n💰 Твой баланс: " . formatRub($balance) . "\n📊 Нужно: " . formatRub($total_with_fee) . " (включая комиссию)"), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
@@ -984,7 +1161,8 @@ function createInviteTransferWithAmount($chat_id, $user_id, $amount, $callback_i
     $stmt = $pdo->prepare("INSERT INTO transactions (user_id, amount, type, description, created_at) VALUES (?, ?, 'invite_transfer', ?, NOW())");
     $stmt->execute([$user_id, -$total_with_fee, $desc]);
     
-    $text = "📨 <b>Пригласительный перевод создан!</b>\n\n";
+    $text = "📨 <b>ПРИГЛАСИТЕЛЬНЫЙ ПЕРЕВОД СОЗДАН!</b>\n";
+    $text .= decorativeDivider();
     $text .= "💰 Сумма: <b>" . formatRub($amount) . "</b>\n";
     $text .= "📊 Комиссия: <b>" . formatRub($fee) . "</b>\n";
     $text .= "⏳ Действует: " . INVITE_TRANSFER_EXPIRE . " часов\n\n";
@@ -1006,12 +1184,12 @@ function processInviteTransfer($chat_id, $user_id, $code) {
     $transfer = $stmt->fetch();
     
     if (!$transfer) {
-        sendMessage($chat_id, "❌ Код недействителен или истек срок действия!", mainKeyboard());
+        sendMessage($chat_id, formatError("Код недействителен или истек срок действия!"), mainKeyboard());
         return;
     }
     
     if ($transfer['sender_id'] == $user_id) {
-        sendMessage($chat_id, "❌ Ты не можешь получить свой собственный перевод!", mainKeyboard());
+        sendMessage($chat_id, formatError("Ты не можешь получить свой собственный перевод!"), mainKeyboard());
         return;
     }
     
@@ -1029,19 +1207,23 @@ function processInviteTransfer($chat_id, $user_id, $code) {
     $stmt->execute([$user_id]);
     $receiver_username = $stmt->fetchColumn();
     
-    sendMessage($transfer['sender_id'], "✅ Пользователь @" . $receiver_username . " получил твой перевод в размере " . formatRub($transfer['amount']) . "!", mainKeyboard());
+    sendMessage($transfer['sender_id'], formatSuccess("Пользователь @" . $receiver_username . " получил твой перевод в размере " . formatRub($transfer['amount']) . "!"), mainKeyboard());
     
-    sendMessage($chat_id, "✅ <b>Перевод получен!</b>\n\n💰 Начислено: <b>" . formatRub($transfer['amount']) . "</b>\n📨 Отправитель: #" . $transfer['sender_id'], mainKeyboard());
+    sendMessage($chat_id, formatSuccess("<b>Перевод получен!</b>\n\n💰 Начислено: <b>" . formatRub($transfer['amount']) . "</b>\n📨 Отправитель: #" . $transfer['sender_id']), mainKeyboard());
 }
 
-// ----- 12.3. ДУЭЛИ -----
+// ============================================
+// 14. ⚔️ ДУЭЛИ
+// ============================================
 function handleDuels($chat_id, $user_id) {
     global $pdo;
     
     checkAndCompleteQuest($user_id, 'check_duels');
     
     if (!checkDuelRequirements($user_id)) {
-        $text = "🏆 <b>Дуэли</b>\n\n❌ Ты не соответствуешь требованиям для участия в дуэлях:\n";
+        $text = "🏆 <b>ДУЭЛИ</b>\n";
+        $text .= decorativeDivider();
+        $text .= "❌ Ты не соответствуешь требованиям для участия в дуэлях:\n";
         $text .= "• Минимум 7 дней в проекте\n";
         $text .= "• Минимум 10 выполненных заданий\n";
         $text .= "• Минимум 3 реферала\n\n";
@@ -1055,7 +1237,7 @@ function handleDuels($chat_id, $user_id) {
     $active_duels = $stmt->fetchColumn();
     
     if ($active_duels >= DUEL_ACTIVE_LIMIT) {
-        sendMessage($chat_id, "❌ У тебя уже " . DUEL_ACTIVE_LIMIT . " активные дуэли! Дождись их завершения.", mainKeyboard());
+        sendMessage($chat_id, formatError("У тебя уже " . DUEL_ACTIVE_LIMIT . " активные дуэли! Дождись их завершения."), mainKeyboard());
         return;
     }
     
@@ -1064,11 +1246,12 @@ function handleDuels($chat_id, $user_id) {
     $daily_duels = $stmt->fetchColumn();
     
     if ($daily_duels >= DUEL_DAILY_LIMIT) {
-        sendMessage($chat_id, "❌ Ты использовал лимит дуэлей на сегодня (макс. " . DUEL_DAILY_LIMIT . ")", mainKeyboard());
+        sendMessage($chat_id, formatError("Ты использовал лимит дуэлей на сегодня (макс. " . DUEL_DAILY_LIMIT . ")"), mainKeyboard());
         return;
     }
     
-    $text = "🏆 <b>Дуэли</b>\n\n";
+    $text = "🏆 <b>ДУЭЛИ</b>\n";
+    $text .= decorativeDivider();
     $text .= "💰 Выбери сумму ставки:\n";
     $text .= "Мин. ставка: " . formatRub(DUEL_MIN_BET) . "\n";
     $text .= "Макс. ставка: " . formatRub(DUEL_MAX_BET) . "\n\n";
@@ -1126,20 +1309,20 @@ function createDuel($chat_id, $user_id, $bet, $callback_id) {
     global $pdo;
     
     if ($bet < DUEL_MIN_BET || $bet > DUEL_MAX_BET) {
-        sendMessage($chat_id, "❌ Ставка должна быть от " . formatRub(DUEL_MIN_BET) . " до " . formatRub(DUEL_MAX_BET), mainKeyboard());
+        sendMessage($chat_id, formatError("Ставка должна быть от " . formatRub(DUEL_MIN_BET) . " до " . formatRub(DUEL_MAX_BET)), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
     
     $balance = getUserBalance($user_id);
     if ($balance < $bet) {
-        sendMessage($chat_id, "❌ Недостаточно средств! Твой баланс: " . formatRub($balance), mainKeyboard());
+        sendMessage($chat_id, formatError("Недостаточно средств! Твой баланс: " . formatRub($balance)), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
     
     if (!checkDuelRequirements($user_id)) {
-        sendMessage($chat_id, "❌ Ты не соответствуешь требованиям для дуэлей!", mainKeyboard());
+        sendMessage($chat_id, formatError("Ты не соответствуешь требованиям для дуэлей!"), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
@@ -1193,7 +1376,8 @@ function findDuelOpponent($duel_id) {
     $stmt->execute([$duel['user1_id']]);
     $user1 = $stmt->fetchColumn();
     
-    $text = "⚔️ <b>Дуэль началась!</b>\n\n";
+    $text = "⚔️ <b>ДУЭЛЬ НАЧАЛАСЬ!</b>\n";
+    $text .= decorativeDivider();
     $text .= "👤 Участник 1: @" . $user1 . "\n";
     $text .= "👤 Участник 2: @" . $opponent['username'] . "\n";
     $text .= "💰 Ставка: " . formatRub($duel['bet']) . "\n";
@@ -1213,26 +1397,26 @@ function joinDuel($chat_id, $user_id, $duel_id, $callback_id) {
     $duel = $stmt->fetch();
     
     if (!$duel) {
-        sendMessage($chat_id, "❌ Эта дуэль уже началась или отменена!", mainKeyboard());
+        sendMessage($chat_id, formatError("Эта дуэль уже началась или отменена!"), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
     
     if ($duel['user1_id'] == $user_id) {
-        sendMessage($chat_id, "❌ Это твоя дуэль! Дождись соперника.", mainKeyboard());
+        sendMessage($chat_id, formatError("Это твоя дуэль! Дождись соперника."), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
     
     if (!checkDuelRequirements($user_id)) {
-        sendMessage($chat_id, "❌ Ты не соответствуешь требованиям для дуэлей!", mainKeyboard());
+        sendMessage($chat_id, formatError("Ты не соответствуешь требованиям для дуэлей!"), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
     
     $balance = getUserBalance($user_id);
     if ($balance < $duel['bet']) {
-        sendMessage($chat_id, "❌ Недостаточно средств! Твой баланс: " . formatRub($balance), mainKeyboard());
+        sendMessage($chat_id, formatError("Недостаточно средств! Твой баланс: " . formatRub($balance)), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
@@ -1251,7 +1435,8 @@ function joinDuel($chat_id, $user_id, $duel_id, $callback_id) {
     $stmt->execute([$user_id]);
     $user2 = $stmt->fetchColumn();
     
-    $text = "⚔️ <b>Дуэль началась!</b>\n\n";
+    $text = "⚔️ <b>ДУЭЛЬ НАЧАЛАСЬ!</b>\n";
+    $text .= decorativeDivider();
     $text .= "👤 Участник 1: @" . $user1 . "\n";
     $text .= "👤 Участник 2: @" . $user2 . "\n";
     $text .= "💰 Ставка: " . formatRub($duel['bet']) . "\n";
@@ -1264,7 +1449,9 @@ function joinDuel($chat_id, $user_id, $duel_id, $callback_id) {
     botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
 }
 
-// ----- 12.4. РЕФЕРАЛЫ -----
+// ============================================
+// 15. 👥 РЕФЕРАЛЫ
+// ============================================
 function showReferrals($chat_id, $user_id) {
     global $pdo;
     
@@ -1279,7 +1466,8 @@ function showReferrals($chat_id, $user_id) {
     $rank = getUserRank($user_id);
     $ref_count = count($refs);
     
-    $text = "👥 <b>Реферальная система 2.0</b>\n\n";
+    $text = "👥 <b>РЕФЕРАЛЬНАЯ СИСТЕМА 2.0</b>\n";
+    $text .= decorativeDivider();
     $text .= "👑 Твой статус: <b>" . $rank['name'] . "</b>\n";
     $text .= "📊 Процент с рефералов: <b>" . $rank['percent'] . "%</b>\n\n";
     $text .= "💰 Доход с рефералов: <b>" . formatRub($total_income) . "</b>\n";
@@ -1309,7 +1497,9 @@ function showReferrals($chat_id, $user_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
-// ----- 12.5. СТРИК -----
+// ============================================
+// 16. 🔥 СТРИК
+// ============================================
 function handleStreak($chat_id, $user_id) {
     global $pdo;
     
@@ -1321,7 +1511,8 @@ function handleStreak($chat_id, $user_id) {
     $stmt->execute([$user_id]);
     $streak = $stmt->fetchColumn() ?: 0;
     
-    $text = "🔥 <b>Ежедневный стрик</b>\n\n";
+    $text = "🔥 <b>ЕЖЕДНЕВНЫЙ СТРИК</b>\n";
+    $text .= decorativeDivider();
     $text .= "📊 Текущий стрик: <b>" . $streak . "</b> дней\n\n";
     $text .= "📋 <b>Награды:</b>\n";
     $text .= "• День 1: " . formatRub(STREAK_BONUS_1) . "\n";
@@ -1385,13 +1576,16 @@ function updateStreak($chat_id, $user_id) {
     }
 }
 
-// ----- 12.6. КВЕСТЫ -----
+// ============================================
+// 17. 🎯 КВЕСТЫ
+// ============================================
 function handleQuests($chat_id, $user_id) {
     global $pdo;
     
     checkAndCompleteQuest($user_id, 'check_quests');
     
-    $text = "🎯 <b>Квесты (достижения)</b>\n\n";
+    $text = "🎯 <b>КВЕСТЫ (ДОСТИЖЕНИЯ)</b>\n";
+    $text .= decorativeDivider();
     $text .= "Выполняй действия в боте и получай награды!\n\n";
     
     $stmt = $pdo->prepare("SELECT q.*, uq.status FROM quests q 
@@ -1433,13 +1627,16 @@ function handleQuests($chat_id, $user_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
-// ----- 12.7. ТОП -----
+// ============================================
+// 18. 🏆 ТОП
+// ============================================
 function handleTop($chat_id, $user_id) {
     global $pdo;
     
     checkAndCompleteQuest($user_id, 'check_top');
     
-    $text = "🏆 <b>Топ-лидеры</b>\n\n";
+    $text = "🏆 <b>ТОП-ЛИДЕРЫ</b>\n";
+    $text .= decorativeDivider();
     
     $text .= "👥 <b>Топ по рефералам:</b>\n";
     $stmt = $pdo->prepare("SELECT u.id, u.username, COUNT(r.id) as refs 
@@ -1492,7 +1689,9 @@ function handleTop($chat_id, $user_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
-// ----- 12.8. КЕЙСЫ -----
+// ============================================
+// 19. 🎲 КЕЙСЫ
+// ============================================
 function handleCases($chat_id, $user_id) {
     global $pdo;
     
@@ -1502,7 +1701,8 @@ function handleCases($chat_id, $user_id) {
     $stmt->execute([$user_id]);
     $keys = $stmt->fetchColumn() ?: 0;
     
-    $text = "🎲 <b>Кейсы</b>\n\n";
+    $text = "🎲 <b>КЕЙСЫ</b>\n";
+    $text .= decorativeDivider();
     $text .= "🔑 Твои ключи: <b>" . $keys . "</b>\n";
     $text .= "💡 1 ключ выдаётся за каждое выполненное задание!\n\n";
     
@@ -1552,7 +1752,7 @@ function openCase($chat_id, $user_id, $case_id, $callback_id) {
     $case = $stmt->fetch();
     
     if (!$case) {
-        sendMessage($chat_id, "❌ Кейс не найден!", mainKeyboard());
+        sendMessage($chat_id, formatError("Кейс не найден!"), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
@@ -1562,7 +1762,7 @@ function openCase($chat_id, $user_id, $case_id, $callback_id) {
     $keys = $stmt->fetchColumn() ?: 0;
     
     if ($keys < $case['keys_required']) {
-        sendMessage($chat_id, "❌ Не хватает ключей! Нужно: " . $case['keys_required'] . ", у тебя: " . $keys, mainKeyboard());
+        sendMessage($chat_id, formatError("Не хватает ключей! Нужно: " . $case['keys_required'] . ", у тебя: " . $keys), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
@@ -1587,7 +1787,8 @@ function openCase($chat_id, $user_id, $case_id, $callback_id) {
     $stmt->execute([$user_id]);
     $new_keys = $stmt->fetchColumn() ?: 0;
     
-    $text = "🎉 <b>Кейс открыт!</b>\n\n";
+    $text = "🎉 <b>КЕЙС ОТКРЫТ!</b>\n";
+    $text .= decorativeDivider();
     $text .= $case['emoji'] . " " . $case['name'] . " кейс\n";
     $text .= "💰 Награда: <b>" . formatRub($reward) . "</b>\n";
     $text .= "🔑 Осталось ключей: " . $new_keys . "\n\n";
@@ -1597,7 +1798,9 @@ function openCase($chat_id, $user_id, $case_id, $callback_id) {
     botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
 }
 
-// ----- 12.9. ЗАДАНИЯ -----
+// ============================================
+// 20. 📋 ЗАДАНИЯ
+// ============================================
 function showTasks($chat_id, $user_id) {
     global $pdo;
     
@@ -1613,7 +1816,8 @@ function showTasks($chat_id, $user_id) {
         return;
     }
     
-    $list_text = "📋 <b>Доступные задания:</b>\n\n";
+    $list_text = "📋 <b>ДОСТУПНЫЕ ЗАДАНИЯ</b>\n";
+    $list_text .= decorativeDivider();
     foreach ($tasks as $index => $task) {
         $list_text .= ($index + 1) . ". " . $task['title'] . "\n";
         $list_text .= "   💰 Награда: <b>" . formatRub($task['reward']) . "</b>\n";
@@ -1624,16 +1828,7 @@ function showTasks($chat_id, $user_id) {
     }
     $list_text .= "⬇️ Нажми на кнопку ниже, чтобы выбрать задание:";
     
-    $inlineKeyboard = ['inline_keyboard' => []];
-    foreach ($tasks as $task) {
-        $btn_text = $task['title'] . ' - ' . formatRub($task['reward']);
-        $inlineKeyboard['inline_keyboard'][] = [
-            ['text' => $btn_text, 'callback_data' => 'task_detail_' . $task['id']]
-        ];
-    }
-    $inlineKeyboard['inline_keyboard'][] = [['text' => '🔄 Обновить список', 'callback_data' => 'refresh_tasks']];
-    
-    sendMessage($chat_id, $list_text, $inlineKeyboard);
+    sendMessage($chat_id, $list_text, tasksKeyboard($tasks));
 }
 
 function showTasksInline($chat_id, $user_id, $message_id, $callback_id) {
@@ -1652,7 +1847,8 @@ function showTasksInline($chat_id, $user_id, $message_id, $callback_id) {
         return;
     }
     
-    $list_text = "📋 <b>Доступные задания:</b>\n\n";
+    $list_text = "📋 <b>ДОСТУПНЫЕ ЗАДАНИЯ</b>\n";
+    $list_text .= decorativeDivider();
     foreach ($tasks as $index => $task) {
         $list_text .= ($index + 1) . ". " . $task['title'] . "\n";
         $list_text .= "   💰 Награда: <b>" . formatRub($task['reward']) . "</b>\n";
@@ -1663,16 +1859,7 @@ function showTasksInline($chat_id, $user_id, $message_id, $callback_id) {
     }
     $list_text .= "⬇️ Нажми на кнопку ниже, чтобы выбрать задание:";
     
-    $inlineKeyboard = ['inline_keyboard' => []];
-    foreach ($tasks as $task) {
-        $btn_text = $task['title'] . ' - ' . formatRub($task['reward']);
-        $inlineKeyboard['inline_keyboard'][] = [
-            ['text' => $btn_text, 'callback_data' => 'task_detail_' . $task['id']]
-        ];
-    }
-    $inlineKeyboard['inline_keyboard'][] = [['text' => '🔄 Обновить список', 'callback_data' => 'refresh_tasks']];
-    
-    editMessage($chat_id, $message_id, $list_text, $inlineKeyboard);
+    editMessage($chat_id, $message_id, $list_text, tasksKeyboard($tasks));
     botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
 }
 
@@ -1684,12 +1871,13 @@ function showTaskDetail($chat_id, $user_id, $task_id, $message_id, $callback_id)
     $task = $stmt->fetch();
     
     if (!$task) {
-        sendMessage($chat_id, "❌ Задание не найдено", mainKeyboard());
+        sendMessage($chat_id, formatError("Задание не найдено"), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
     
-    $text = "📌 <b>" . $task['title'] . "</b>\n\n";
+    $text = "📌 <b>" . $task['title'] . "</b>\n";
+    $text .= decorativeDivider();
     $text .= $task['description'] . "\n\n";
     $text .= "💰 Награда: <b>" . formatRub($task['reward']) . "</b>\n";
     $text .= "💶 ≈ " . rubToEur($task['reward']) . " €\n";
@@ -1715,14 +1903,7 @@ function showTaskDetail($chat_id, $user_id, $task_id, $message_id, $callback_id)
     $text .= "Иначе может привести к списанию средств с баланса.\n\n";
     $text .= "✅ После выполнения нажми кнопку ниже:";
     
-    $inlineKeyboard = [
-        'inline_keyboard' => [
-            [['text' => '✅ Выполнил задание', 'callback_data' => 'task_do_' . $task_id]],
-            [['text' => '🔙 Назад к списку', 'callback_data' => 'refresh_tasks']]
-        ]
-    ];
-    
-    editMessage($chat_id, $message_id, $text, $inlineKeyboard);
+    editMessage($chat_id, $message_id, $text, taskDetailKeyboard($task_id));
     botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
 }
 
@@ -1734,13 +1915,13 @@ function doTask($chat_id, $user_id, $task_id, $username, $callback_id) {
     $task = $stmt->fetch();
     
     if (!$task) {
-        sendMessage($chat_id, "❌ Задание не найдено", mainKeyboard());
+        sendMessage($chat_id, formatError("Задание не найдено"), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
     
     if (!checkUserDaysRequirement($user_id, $task['requirement_days'])) {
-        sendMessage($chat_id, "❌ Для выполнения этого задания нужно быть в проекте минимум " . $task['requirement_days'] . " дней!\n\nТы в проекте: " . getDaysInProject($user_id) . " дней", mainKeyboard());
+        sendMessage($chat_id, formatError("Для выполнения этого задания нужно быть в проекте минимум " . $task['requirement_days'] . " дней!\n\nТы в проекте: " . getDaysInProject($user_id) . " дней"), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
@@ -1750,7 +1931,7 @@ function doTask($chat_id, $user_id, $task_id, $username, $callback_id) {
     $existing = $stmt->fetch();
     
     if ($existing) {
-        sendMessage($chat_id, "❌ Ты уже выполнил это задание!", mainKeyboard());
+        sendMessage($chat_id, formatError("Ты уже выполнил это задание!"), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
@@ -1767,7 +1948,8 @@ function doTask($chat_id, $user_id, $task_id, $username, $callback_id) {
             
             sendMessage($chat_id, "⏳ Задание отправлено на проверку администратору!\n\nБот не может автоматически проверить подписку.\nОжидай подтверждения.", mainKeyboard());
             
-            $admin_text = "📋 Задание требует ручной проверки!\n\n";
+            $admin_text = "📋 ЗАДАНИЕ ТРЕБУЕТ РУЧНОЙ ПРОВЕРКИ!\n";
+            $admin_text .= decorativeDivider();
             $admin_text .= "👤 Пользователь: @" . $username . "\n";
             $admin_text .= "📌 Задание: " . $task['title'] . "\n";
             $admin_text .= "💰 Награда: " . formatRub($task['reward']) . "\n";
@@ -1788,7 +1970,7 @@ function doTask($chat_id, $user_id, $task_id, $username, $callback_id) {
                 $channel_link = 'https://t.me/c/' . substr($channel_link, 4);
             }
             
-            $text = "❌ Ты не подписан на канал!\n\n";
+            $text = formatError("Ты не подписан на канал!\n\n");
             $text .= "🔗 <a href='" . $channel_link . "'>👉 Подписаться на канал</a>\n\n";
             $text .= "⚠️ Помни: нужно быть подписанным минимум 3 дня!\n\n";
             $text .= "После подписки нажми кнопку ещё раз.";
@@ -1838,7 +2020,8 @@ function doTask($chat_id, $user_id, $task_id, $username, $callback_id) {
         $stmt->execute([$ref_id, $user_id, $ref_bonus]);
     }
     
-    $text = "✅ <b>Задание выполнено!</b>\n\n";
+    $text = formatSuccess("<b>ЗАДАНИЕ ВЫПОЛНЕНО!</b>\n");
+    $text .= decorativeDivider();
     $text .= "💰 Начислено: <b>" . formatRub($task['reward']) . "</b>\n";
     if ($ref_id > 0) {
         $text .= "👥 Реферальный бонус: <b>" . formatRub($ref_bonus) . "</b>\n";
@@ -1862,7 +2045,7 @@ function checkSubscriptionCallback($chat_id, $user_id, $task_id, $callback_id) {
     $task = $stmt->fetch();
     
     if (!$task) {
-        sendMessage($chat_id, "❌ Задание не найдено", mainKeyboard());
+        sendMessage($chat_id, formatError("Задание не найдено"), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
@@ -1878,7 +2061,8 @@ function checkSubscriptionCallback($chat_id, $user_id, $task_id, $callback_id) {
         
         sendMessage($chat_id, "⏳ Задание отправлено на проверку администратору!\n\nОжидай подтверждения.", mainKeyboard());
         
-        $admin_text = "📋 Задание требует ручной проверки!\n\n";
+        $admin_text = "📋 ЗАДАНИЕ ТРЕБУЕТ РУЧНОЙ ПРОВЕРКИ!\n";
+        $admin_text .= decorativeDivider();
         $admin_text .= "👤 Пользователь: @" . $username . "\n";
         $admin_text .= "📌 Задание: " . $task['title'] . "\n";
         $admin_text .= "💰 Награда: " . formatRub($task['reward']) . "\n";
@@ -1893,7 +2077,7 @@ function checkSubscriptionCallback($chat_id, $user_id, $task_id, $callback_id) {
     
     if ($is_subscribed) {
         if (!checkUserDaysRequirement($user_id, $task['requirement_days'])) {
-            sendMessage($chat_id, "❌ Нужно быть в проекте минимум " . $task['requirement_days'] . " дней!\n\nТы в проекте: " . getDaysInProject($user_id) . " дней", mainKeyboard());
+            sendMessage($chat_id, formatError("Нужно быть в проекте минимум " . $task['requirement_days'] . " дней!\n\nТы в проекте: " . getDaysInProject($user_id) . " дней"), mainKeyboard());
             botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
             return;
         }
@@ -1932,7 +2116,8 @@ function checkSubscriptionCallback($chat_id, $user_id, $task_id, $callback_id) {
             $stmt->execute([$ref_id, $user_id, $ref_bonus]);
         }
         
-        $text = "✅ <b>Подписка подтверждена! Задание выполнено!</b>\n\n";
+        $text = formatSuccess("<b>Подписка подтверждена! Задание выполнено!</b>\n");
+        $text .= decorativeDivider();
         $text .= "💰 Начислено: <b>" . formatRub($task['reward']) . "</b>\n";
         if ($ref_id > 0) {
             $text .= "👥 Реферальный бонус: <b>" . formatRub($ref_bonus) . "</b>\n";
@@ -1948,7 +2133,7 @@ function checkSubscriptionCallback($chat_id, $user_id, $task_id, $callback_id) {
             $channel_link = 'https://t.me/c/' . substr($channel_link, 4);
         }
         
-        $text = "❌ Ты всё ещё не подписан на канал!\n\n";
+        $text = formatError("Ты всё ещё не подписан на канал!\n\n");
         $text .= "🔗 <a href='" . $channel_link . "'>👉 Подписаться на канал</a>\n\n";
         $text .= "⚠️ Помни: нужно быть подписанным минимум 3 дня!\n\n";
         $text .= "После подписки нажми кнопку ещё раз.";
@@ -1971,12 +2156,14 @@ function getDaysInProject($user_id) {
     return $stmt->fetchColumn() ?: 0;
 }
 
-// ----- 12.10. ВЫВОД СРЕДСТВ (ПРОДОЛЖЕНИЕ) -----
+// ============================================
+// 21. 💳 ВЫВОД СРЕДСТВ (ПРОДОЛЖЕНИЕ)
+// ============================================
 function processWithdraw($chat_id, $user_id, $data, $callback_id) {
     global $pdo;
     
     if (hasActiveWithdraw($user_id)) {
-        sendMessage($chat_id, "⚠️ У тебя уже есть активная заявка на вывод!\n\nОжидай её обработки.", mainKeyboard());
+        sendMessage($chat_id, formatWarning("У тебя уже есть активная заявка на вывод!\n\nОжидай её обработки."), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
@@ -1986,7 +2173,7 @@ function processWithdraw($chat_id, $user_id, $data, $callback_id) {
     $user = $stmt->fetch();
     
     if ($user['balance'] < MIN_WITHDRAW_RUB) {
-        sendMessage($chat_id, "❌ Минимальная сумма для вывода: " . formatRub(MIN_WITHDRAW_RUB) . "\n\nТвой баланс: " . formatRub($user['balance']), mainKeyboard());
+        sendMessage($chat_id, formatError("Минимальная сумма для вывода: " . formatRub(MIN_WITHDRAW_RUB) . "\n\nТвой баланс: " . formatRub($user['balance'])), mainKeyboard());
         botRequest('answerCallbackQuery', ['callback_query_id' => $callback_id]);
         return;
     }
@@ -1998,7 +2185,8 @@ function processWithdraw($chat_id, $user_id, $data, $callback_id) {
     $stmt = $pdo->prepare("UPDATE users SET last_withdraw_method = ? WHERE id = ?");
     $stmt->execute([$method, $user_id]);
     
-    $text = "💳 <b>Вывод средств - " . $method_name . "</b>\n\n";
+    $text = "💳 <b>ВЫВОД СРЕДСТВ - " . $method_name . "</b>\n";
+    $text .= decorativeDivider();
     $text .= "💰 Сумма вывода: <b>" . formatRub($amount) . "</b>\n";
     $text .= "💶 ≈ " . rubToEur($amount) . " €\n\n";
     $text .= "📝 <b>Напиши реквизиты для вывода:</b>\n";
@@ -2029,7 +2217,7 @@ function handleWithdrawText($chat_id, $user_id, $text) {
     if (!$user || $user['withdraw_waiting_text'] != 'yes') return;
     
     if (hasActiveWithdraw($user['id'])) {
-        sendMessage($chat_id, "⚠️ У тебя уже есть активная заявка на вывод!", mainKeyboard());
+        sendMessage($chat_id, formatWarning("У тебя уже есть активная заявка на вывод!"), mainKeyboard());
         $stmt = $pdo->prepare("UPDATE users SET withdraw_waiting_text = NULL, last_withdraw_method = NULL WHERE id = ?");
         $stmt->execute([$user['id']]);
         return;
@@ -2040,7 +2228,7 @@ function handleWithdrawText($chat_id, $user_id, $text) {
     $details = trim($text);
     
     if (empty($details) || strlen($details) < 3) {
-        sendMessage($chat_id, "❌ Слишком короткое сообщение!\n\nНапиши реквизиты подробнее.", mainKeyboard());
+        sendMessage($chat_id, formatError("Слишком короткое сообщение!\n\nНапиши реквизиты подробнее."), mainKeyboard());
         return;
     }
     
@@ -2060,7 +2248,8 @@ function handleWithdrawText($chat_id, $user_id, $text) {
     
     $method_name = $method == 'crypto' ? '💎 Криптокошелёк (USDT TRC20)' : '🏦 Банковский счёт';
     
-    $text = "✅ <b>Заявка на вывод отправлена!</b>\n\n";
+    $text = formatSuccess("<b>ЗАЯВКА НА ВЫВОД ОТПРАВЛЕНА!</b>\n");
+    $text .= decorativeDivider();
     $text .= "💰 Сумма: <b>" . formatRub($amount) . "</b>\n";
     $text .= "💶 ≈ " . rubToEur($amount) . " €\n";
     $text .= "🏦 Способ: " . $method_name . "\n";
@@ -2071,7 +2260,8 @@ function handleWithdrawText($chat_id, $user_id, $text) {
     
     sendMessage($chat_id, $text, mainKeyboard());
     
-    $admin_text = "💳 <b>НОВАЯ ЗАЯВКА НА ВЫВОД!</b>\n\n";
+    $admin_text = "💳 <b>НОВАЯ ЗАЯВКА НА ВЫВОД!</b>\n";
+    $admin_text .= decorativeDivider();
     $admin_text .= "👤 Пользователь: @" . $user['username'] . "\n";
     $admin_text .= "💰 Сумма: " . formatRub($amount) . " (" . rubToEur($amount) . " €)\n";
     $admin_text .= "🏦 Способ: " . $method_name . "\n";
@@ -2082,7 +2272,9 @@ function handleWithdrawText($chat_id, $user_id, $text) {
     sendMessage(ADMIN_ID, $admin_text);
 }
 
-// ----- 12.11. МОИ ВЫВОДЫ -----
+// ============================================
+// 22. 📊 МОИ ВЫВОДЫ
+// ============================================
 function showMyWithdraws($chat_id, $user_id) {
     global $pdo;
     
@@ -2093,7 +2285,8 @@ function showMyWithdraws($chat_id, $user_id) {
     if (count($withdraws) == 0) {
         sendMessage($chat_id, "📊 У тебя пока нет заявок на вывод.", mainKeyboard());
     } else {
-        $text = "📊 <b>Мои заявки на вывод</b>\n\n";
+        $text = "📊 <b>МОИ ЗАЯВКИ НА ВЫВОД</b>\n";
+        $text .= decorativeDivider();
         foreach ($withdraws as $w) {
             $status_text = $w['status'] == 'pending' ? '⏳ Ожидает' : ($w['status'] == 'approved' ? '✅ Выплачено' : '❌ Отклонено');
             $method_text = $w['method'] == 'crypto' ? '💎 Крипто' : '🏦 Банк';
@@ -2104,7 +2297,9 @@ function showMyWithdraws($chat_id, $user_id) {
     }
 }
 
-// ----- 12.12. ПРОФИЛЬ -----
+// ============================================
+// 23. 👤 ПОКАЗАТЬ ПРОФИЛЬ
+// ============================================
 function showProfile($chat_id, $user_id) {
     global $pdo;
     
@@ -2119,7 +2314,8 @@ function showProfile($chat_id, $user_id) {
     $stmt->execute([$user_id]);
     $keys = $stmt->fetchColumn() ?: 0;
     
-    $text = "👤 <b>Твой профиль</b>\n\n";
+    $text = "👤 <b>ТВОЙ ПРОФИЛЬ</b>\n";
+    $text .= decorativeDivider();
     $text .= $rank['icon'] . " <b>" . $rank['name'] . "</b>\n";
     $text .= "👥 Реферальный процент: <b>" . $ref_percent . "%</b>\n";
     $text .= "🔑 Ключей для кейсов: <b>" . $keys . "</b>\n\n";
@@ -2141,11 +2337,14 @@ function showProfile($chat_id, $user_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
-// ----- 12.13. ПОМОЩЬ -----
+// ============================================
+// 24. ❓ ПОМОЩЬ
+// ============================================
 function showHelp($chat_id) {
-    $text = "❓ <b>Помощь</b>\n\n";
+    $text = "❓ <b>ПОМОЩЬ</b>\n";
+    $text .= decorativeDivider();
     $text .= "📌 <b>Как заработать?</b>\n";
-    $text .= "1. Нажми «📋 Задания»\n";
+    $text .= "1. Нажми «📋 ЗАДАНИЯ»\n";
     $text .= "2. Выбери задание и выполни его\n";
     $text .= "3. Получи награду на баланс\n\n";
     $text .= "💰 <b>Вывод средств:</b>\n";
@@ -2166,7 +2365,9 @@ function showHelp($chat_id) {
     sendMessage($chat_id, $text, mainKeyboard());
 }
 
-// ----- 12.14. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ -----
+// ============================================
+// 25. 💰 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// ============================================
 function getUserBalance($user_id) {
     global $pdo;
     $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
@@ -2175,7 +2376,7 @@ function getUserBalance($user_id) {
 }
 
 // ============================================
-// ОСНОВНОЙ ЦИКЛ
+// 🚀 ОСНОВНОЙ ЦИКЛ
 // ============================================
 echo "🤖 Бот ArtaWork запущен!\n";
 echo "Нажми Ctrl+C для остановки\n\n";
